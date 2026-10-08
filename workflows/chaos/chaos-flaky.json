@@ -1,0 +1,88 @@
+{
+  "name": "chaos-flaky",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## chaos-flaky\nReturns 200 or 503 at random. Used to test that retries eventually succeed.\n\nFire it via the webhook. Manual runs do NOT trigger the error workflow.",
+        "height": 200,
+        "width": 380
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -360
+      ],
+      "id": "f61b7ac7-0a97-4644-bfd9-bb34a7e724f3"
+    },
+    {
+      "parameters": {
+        "path": "chaos-flaky",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -100
+      ],
+      "webhookId": "2b16c2bf-39d7-4044-8614-a0b07f8f3d4b",
+      "id": "5a6a9bbf-4643-454b-9d6b-0e96ceda2a69"
+    },
+    {
+      "parameters": {},
+      "name": "Manual run (debug only)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        100
+      ],
+      "id": "d248dbcb-02f1-43c1-ade7-d0c763008c41"
+    },
+    {
+      "parameters": {
+        "url": "https://httpbin.org/status/200,503",
+        "options": {}
+      },
+      "name": "Call flaky API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "be83d30c-e057-474f-a0d8-e26fd2eee9f8"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call flaky API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual run (debug only)": {
+      "main": [
+        [
+          {
+            "node": "Call flaky API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

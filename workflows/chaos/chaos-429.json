@@ -1,0 +1,88 @@
+{
+  "name": "chaos-429",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## chaos-429\nFails with HTTP 429. Used to test rate-limit classification and backoff.\n\nFire it via the webhook. Manual runs do NOT trigger the error workflow.",
+        "height": 200,
+        "width": 380
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -360
+      ],
+      "id": "c9b46055-345e-4255-a855-bb646a0709dc"
+    },
+    {
+      "parameters": {
+        "path": "chaos-429",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -100
+      ],
+      "webhookId": "f86d6df1-6931-4877-86a2-65c527407054",
+      "id": "58a783a4-a1e6-47e7-a5f7-f93c67356e26"
+    },
+    {
+      "parameters": {},
+      "name": "Manual run (debug only)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        100
+      ],
+      "id": "65528b6b-36dd-4ab1-9d2c-20df57e56913"
+    },
+    {
+      "parameters": {
+        "url": "https://httpbin.org/status/429",
+        "options": {}
+      },
+      "name": "Call rate-limited API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "cc4c83d4-a4bb-4056-905b-49b4fec935e1"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call rate-limited API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual run (debug only)": {
+      "main": [
+        [
+          {
+            "node": "Call rate-limited API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

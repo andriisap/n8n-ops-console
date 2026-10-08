@@ -1,0 +1,88 @@
+{
+  "name": "chaos-auth",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## chaos-auth\nFails with HTTP 401. Used to test auth errors that must not be retried.\n\nFire it via the webhook. Manual runs do NOT trigger the error workflow.",
+        "height": 200,
+        "width": 380
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -360
+      ],
+      "id": "ea3492a2-01c3-4644-a252-307232f5d3ef"
+    },
+    {
+      "parameters": {
+        "path": "chaos-auth",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -100
+      ],
+      "webhookId": "2d27646e-c462-4eee-a4e1-f87aeb6c15d4",
+      "id": "08475c4b-3dc0-4477-9933-0c66477a39cb"
+    },
+    {
+      "parameters": {},
+      "name": "Manual run (debug only)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        100
+      ],
+      "id": "05c67d11-a3fe-4b84-bfd3-a62b0299960f"
+    },
+    {
+      "parameters": {
+        "url": "https://httpbin.org/status/401",
+        "options": {}
+      },
+      "name": "Call API with bad key",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "9406cd04-d1b8-4e0a-9041-d772a81d6fc5"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call API with bad key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual run (debug only)": {
+      "main": [
+        [
+          {
+            "node": "Call API with bad key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

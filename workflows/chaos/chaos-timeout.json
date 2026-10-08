@@ -1,0 +1,90 @@
+{
+  "name": "chaos-timeout",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## chaos-timeout\nThe API answers after 10 s, the node gives up after 3 s. Used to test transient errors.\n\nFire it via the webhook. Manual runs do NOT trigger the error workflow.",
+        "height": 200,
+        "width": 380
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -360
+      ],
+      "id": "24da0189-8292-411a-bcba-719bebc6b015"
+    },
+    {
+      "parameters": {
+        "path": "chaos-timeout",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -100
+      ],
+      "webhookId": "010795b3-755e-43e2-b4e4-164f900a1d78",
+      "id": "3c2a1ee3-75fc-447b-a714-6bc04fb495a8"
+    },
+    {
+      "parameters": {},
+      "name": "Manual run (debug only)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        100
+      ],
+      "id": "4e75bd09-ea06-4551-aa7f-13bb6b99af9f"
+    },
+    {
+      "parameters": {
+        "url": "https://httpbin.org/delay/10",
+        "options": {
+          "timeout": 3000
+        }
+      },
+      "name": "Call slow API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "55f31d8c-ebb6-4724-98c3-18d75453691a"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call slow API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual run (debug only)": {
+      "main": [
+        [
+          {
+            "node": "Call slow API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

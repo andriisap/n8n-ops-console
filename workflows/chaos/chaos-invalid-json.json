@@ -1,0 +1,87 @@
+{
+  "name": "chaos-invalid-json",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## chaos-invalid-json\nParses a malformed fake LLM reply. Used to test validation errors.\n\nFire it via the webhook. Manual runs do NOT trigger the error workflow.",
+        "height": 200,
+        "width": 380
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -360
+      ],
+      "id": "d293f039-85b9-409a-98f5-51e461ba890c"
+    },
+    {
+      "parameters": {
+        "path": "chaos-invalid-json",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -100
+      ],
+      "webhookId": "f39716bf-18ee-4ab6-8960-ffbdd35e4660",
+      "id": "be54f477-a92c-4867-ac93-1531745a1e31"
+    },
+    {
+      "parameters": {},
+      "name": "Manual run (debug only)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        100
+      ],
+      "id": "c2a4a43e-9833-4f03-bc40-152b25f8c2b5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simulates an LLM that was asked for JSON but added chatter and cut off mid-object.\nconst llmReply = 'Sure! Here is the lead you asked for:\\n{\"name\": \"Acme GmbH\", \"score\": 87, \"reason\": \"Fits ICP';\n\n// Naive parsing, the way many workflows do it. This throws SyntaxError on purpose.\nconst parsed = JSON.parse(llmReply);\n\nreturn [{ json: parsed }];\n"
+      },
+      "name": "Parse LLM reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "b32d00a1-e196-4054-b8a8-5d4f45228391"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse LLM reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual run (debug only)": {
+      "main": [
+        [
+          {
+            "node": "Parse LLM reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
