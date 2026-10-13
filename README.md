@@ -2,7 +2,34 @@
 
 Reliability layer for self-hosted n8n: one error workflow for every workflow, incidents grouped by fingerprint, retries with backoff, LLM cost per run, and a Next.js dashboard on top.
 
-Status: stage 1 of 8 (ops database). Tested on n8n 2.42.5.
+Status: stage 2 of 8 (central error workflow). Tested on n8n 2.42.5.
+
+## How a failure flows
+
+```
+any workflow fails
+  → ops-error-handler (Error Trigger)
+  → normalize + classify (rate_limit / transient / auth / validation / unknown)
+  → upsert incident by fingerprint, insert event by execution id
+  → new or reopened? → Telegram alert → mark alerted
+  → database down?   → fallback Telegram alert, no dedup
+```
+
+What happens when each piece breaks, and how it was verified on the live instance: [docs/failure-modes.md](docs/failure-modes.md).
+
+## Tests
+
+```bash
+node workflows/ops/src/normalize-error.test.js          # classification and normalization
+node workflows/ops/src/build-fallback-alert.test.js     # fallback message never prints [object Object]
+python3 infra/tests/test_upsert_incident.py             # dedup, idempotency, reopen (needs a scratch Postgres)
+```
+
+After editing anything in `workflows/ops/src/`, rebuild the importable JSON:
+
+```bash
+python3 scripts/build-error-handler.py
+```
 
 ## Repo layout
 

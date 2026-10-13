@@ -1,0 +1,332 @@
+{
+  "name": "ops-error-handler",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ops-error-handler\nEvery workflow points here (Settings → Error workflow).\n\n1. Normalize: flatten the payload, classify the error\n2. Upsert: one incident per fingerprint, one event per execution\n3. Alert only on a new or reopened incident\n4. If the DB write fails, alert anyway (bottom branch)\n\nSource of the code and SQL: `workflows/ops/src/` in the repo.",
+        "height": 300,
+        "width": 460
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -420
+      ],
+      "id": "db0cdecb-0505-5423-afe2-677a643136f2"
+    },
+    {
+      "parameters": {},
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "32cdabff-538c-5794-8e5c-dd34222a6f85"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bb035161-efaf-57d2-8cb8-8758b6cc4bd8",
+              "name": "telegram_chat_id",
+              "value": "PASTE_CHAT_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "id": "1b4f87dc-a17f-515d-8f00-5e3a63822b0c"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node \"Normalize error\" in ops-error-handler.\n// Turns the Error Trigger payload into one flat record and decides the error class.\n// The fingerprint is computed in SQL (md5), so this node needs no crypto module.\n\nconst input = $input.first().json;\nconst exec = input.execution ?? {};\nconst trig = input.trigger ?? {};      // present when a trigger node failed, not a regular node\nconst wf = input.workflow ?? {};\nconst err = exec.error ?? trig.error ?? {};\n\nconst message = String(err.message ?? 'Unknown error');\nconst description = err.description ? String(err.description) : '';\n\nfunction httpStatus() {\n  const candidates = [err.httpCode, err.status, err.statusCode, err.cause?.status];\n  for (const c of candidates) {\n    const n = Number(c);\n    if (Number.isInteger(n) && n >= 100 && n <= 599) return n;\n  }\n  const m = /\\b(?:status code|HTTP)\\s*(\\d{3})\\b/i.exec(`${message} ${description}`);\n  return m ? Number(m[1]) : null;\n}\n\nconst http = httpStatus();\nconst text = `${err.name ?? ''} ${err.code ?? ''} ${message} ${description}`;\n\n// Order matters: the first matching rule wins.\nfunction classify() {\n  if (http === 429 || /too many requests|rate.?limit|quota exceeded/i.test(text)) return 'rate_limit';\n  if (http === 401 || http === 403 ||\n      /unauthori[sz]ed|forbidden|authorization failed|invalid api key|invalid token|credentials/i.test(text)) return 'auth';\n  if ((http !== null && (http >= 500 || http === 408)) ||\n      /timeout|timed out|ETIMEDOUT|ECONNABORTED|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|service unavailable|bad gateway|not available|connection was aborted|connection (?:refused|reset|closed)|server is offline/i.test(text)) return 'transient';\n  if (/SyntaxError|JSON|unexpected token|validation|invalid|schema|required/i.test(text)) return 'validation';\n  return 'unknown';\n}\n\n// Strips the parts of a message that change between runs, so one problem gets one fingerprint.\nfunction normalize(msg) {\n  return msg\n    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<uuid>')\n    .replace(/\\b\\d{4}-\\d{2}-\\d{2}[T ][\\d:.]+Z?/g, '<ts>')\n    .replace(/https?:\\/\\/[^\\s?#]+[^\\s]*/g, (url) => url.split(/[?#]/)[0])\n    .replace(/[\\w.+-]+@[\\w-]+\\.[\\w.-]+/g, '<email>')\n    .replace(/\\b[0-9a-f]{16,}\\b/gi, '<hex>')\n    .replace(/\\d+/g, '<n>')   // no \\b: \"3000ms\" has no word boundary between 0 and m\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .slice(0, 500);\n}\n\nconst executionId = exec.id\n  ? String(exec.id)\n  : `trigger:${wf.id ?? 'unknown'}:${Date.now()}`;   // trigger failures have no execution\n\nreturn [{\n  json: {\n    execution_id: executionId,\n    execution_url: exec.url ?? null,\n    execution_mode: exec.mode ?? trig.mode ?? null,\n    retry_of: exec.retryOf ?? null,\n    workflow_id: String(wf.id ?? 'unknown'),\n    workflow_name: String(wf.name ?? 'unknown'),\n    node_name: exec.lastNodeExecuted ?? err.node?.name ?? null,\n    http_status: http,\n    error_class: classify(),\n    error_message: message.slice(0, 2000),\n    normalized_message: normalize(message),\n    error_raw: {\n      name: err.name ?? null,\n      message: message.slice(0, 2000),\n      description: description.slice(0, 2000) || null,\n      http_code: err.httpCode ?? null,\n      code: err.code ?? null,\n      stack: err.stack ? String(err.stack).slice(0, 4000) : null,\n    },\n  },\n}];\n"
+      },
+      "name": "Normalize error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "a76f9cef-47c1-5bc9-b9dd-0f67e7de25da"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Postgres node \"Upsert incident\" in ops-error-handler.\n-- $1 = the whole normalized record as JSON (one parameter, so commas or quotes\n-- inside error messages can never break parameter parsing).\n-- Always returns exactly one row.\n\nWITH input AS (\n    SELECT\n        p->>'execution_id'       AS execution_id,\n        p->>'workflow_id'        AS workflow_id,\n        p->>'workflow_name'      AS workflow_name,\n        p->>'node_name'          AS node_name,\n        p->>'error_class'        AS error_class,\n        p->>'error_message'      AS error_message,\n        p->>'normalized_message' AS normalized_message,\n        p->>'execution_url'      AS execution_url,\n        p->>'execution_mode'     AS execution_mode,\n        p->'error_raw'           AS error_raw,\n        md5(concat_ws('|',\n            p->>'workflow_id',\n            coalesce(p->>'node_name', ''),\n            p->>'error_class',\n            p->>'normalized_message')) AS fingerprint\n    FROM (SELECT $1::jsonb AS p) AS src\n),\n-- The same execution reported twice (n8n retry of the handler, manual re-run): do nothing.\nalready AS (\n    SELECT 1 FROM error_events e JOIN input i USING (execution_id)\n),\n-- CTEs read the table as it was before this statement, so this is the status before the upsert.\nprev AS (\n    SELECT inc.status FROM incidents inc JOIN input i USING (fingerprint)\n),\nupsert AS (\n    INSERT INTO incidents (fingerprint, workflow_id, workflow_name, node_name, error_class, error_message)\n    SELECT fingerprint, workflow_id, workflow_name, node_name, error_class, normalized_message\n    FROM input\n    WHERE NOT EXISTS (SELECT 1 FROM already)\n    ON CONFLICT (fingerprint) DO UPDATE SET\n        occurrences    = incidents.occurrences + 1,\n        last_seen_at   = now(),\n        workflow_name  = EXCLUDED.workflow_name,\n        status         = CASE WHEN incidents.status = 'resolved' THEN 'open' ELSE incidents.status END,\n        reopened_count = incidents.reopened_count + (incidents.status = 'resolved')::int,\n        resolved_at    = CASE WHEN incidents.status = 'resolved' THEN NULL ELSE incidents.resolved_at END\n    RETURNING id, status, occurrences, reopened_count, (xmax = 0) AS is_new\n),\nev AS (\n    INSERT INTO error_events (incident_id, execution_id, workflow_id, workflow_name, node_name,\n                              error_class, error_message, error_raw, execution_url, execution_mode)\n    SELECT u.id, i.execution_id, i.workflow_id, i.workflow_name, i.node_name,\n           i.error_class, i.error_message, i.error_raw, i.execution_url, i.execution_mode\n    FROM upsert u CROSS JOIN input i\n    ON CONFLICT (execution_id) DO NOTHING\n    RETURNING id\n)\nSELECT\n    u.id                                              AS incident_id,\n    u.status                                          AS status,\n    u.occurrences                                     AS occurrences,\n    u.reopened_count                                  AS reopened_count,\n    u.is_new                                          AS is_new,\n    coalesce((SELECT status FROM prev) = 'resolved', false) AS is_reopened,\n    (SELECT id FROM ev)                               AS error_event_id,\n    false                                             AS duplicate,\n    u.status = 'open'\n        AND (u.is_new OR coalesce((SELECT status FROM prev) = 'resolved', false)) AS should_alert\nFROM upsert u\nUNION ALL\nSELECT NULL, NULL, NULL, NULL, false, false, NULL, true, false\nWHERE EXISTS (SELECT 1 FROM already);\n",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "name": "Upsert incident",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        660,
+        0
+      ],
+      "id": "abc2520d-b42a-5afa-90f5-a05c97fa0f29",
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "643ff4c8-f5cd-5d69-9efb-4293bc7bbfd4",
+              "leftValue": "={{ $json.should_alert }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "name": "Should alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        -100
+      ],
+      "id": "c29c7a3e-2133-59c5-a02f-ca5f99f2e019"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node \"Build alert\" in ops-error-handler. Telegram HTML mode, so every value is escaped.\n\nconst row = $input.first().json;                       // from \"Upsert incident\"\nconst e = $('Normalize error').first().json;\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst cut = (s, n) => (s.length > n ? `${s.slice(0, n)}…` : s);\n\nconst title = row.is_reopened\n  ? `🟠 <b>Reopened incident #${row.incident_id}</b> (reopened ${row.reopened_count}×)`\n  : `🔴 <b>New incident #${row.incident_id}</b>`;\n\nconst lines = [\n  title,\n  `<b>${esc(e.workflow_name)}</b>${e.node_name ? ` → ${esc(e.node_name)}` : ''}`,\n  `Class: <code>${esc(e.error_class)}</code>${e.http_status ? ` · HTTP ${e.http_status}` : ''}`,\n  '',\n  `<pre>${esc(cut(e.error_message, 600))}</pre>`,\n];\n\nif (e.execution_url) lines.push(`<a href=\"${esc(e.execution_url)}\">Open execution ${esc(e.execution_id)}</a>`);\n\nreturn [{ json: { text: lines.join('\\n') } }];\n"
+      },
+      "name": "Build alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -200
+      ],
+      "id": "333c1e3d-da18-59b3-8983-0c9ca18c9d9c"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegram_chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "name": "Send alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        -200
+      ],
+      "id": "e9943c4e-3f15-56a3-80b7-997abcfd36fb",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE incidents SET last_alerted_at = now() WHERE id = $1::bigint;",
+        "options": {
+          "queryReplacement": "={{ $('Upsert incident').first().json.incident_id }}"
+        }
+      },
+      "name": "Mark alerted",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1560,
+        -200
+      ],
+      "id": "ebeb7213-d441-5daf-8a88-518a54c6eefe"
+    },
+    {
+      "parameters": {},
+      "name": "No alert needed",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "18cc198e-a377-5609-be41-049f5889e76c"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node \"Build fallback alert\": runs when the ops database can't be written.\n// The alert must still go out, otherwise a dead database turns every failure silent.\n\nconst e = $('Normalize error').first().json;\n\n// n8n's error output puts the error under `error`, usually as an object, sometimes a string.\n// On a connection failure the Postgres node sets message to \"Failed query: <the whole SQL>\",\n// so the real cause has to be searched for across the whole error, not taken from `message`.\nconst KNOWN_CAUSES = [\n  /getaddrinfo \\w+ [\\w.-]+/i,                       // host can't be resolved (container stopped)\n  /connect ECONNREFUSED [\\w.:]+/i,                  // host up, nothing listening\n  /connect ETIMEDOUT [\\w.:]+/i,\n  /password authentication failed for user \"?[\\w-]+\"?/i,\n  /database \"?[\\w-]+\"? does not exist/i,\n  /Connection terminated[\\w ]*/i,\n  /too many clients already/i,\n  /timeout exceeded when trying to connect/i,\n];\n\nfunction describeDbError(item) {\n  const err = item.error ?? item;\n  if (typeof err === 'string') return err;\n\n  let all = '';\n  try { all = JSON.stringify(err); } catch { /* circular, fall through */ }\n  for (const re of KNOWN_CAUSES) {\n    const m = re.exec(all);\n    if (m) return m[0];\n  }\n\n  const isQueryDump = (s) => typeof s === 'string' && /^\\s*Failed query:/i.test(s);\n  const readable = [err.description, err.cause?.message, err.message]\n    .filter((s) => typeof s === 'string' && s.trim() && !isQueryDump(s));\n  if (readable.length) return readable[0];\n  return all ? all.slice(0, 300) : 'unknown database error';\n}\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst cut = (s, n) => (s.length > n ? `${s.slice(0, n)}…` : s);\n\nconst lines = [\n  '⚠️ <b>Ops DB unavailable, alerting without dedup</b>',\n  `DB error: <code>${esc(cut(describeDbError($input.first().json), 300))}</code>`,\n  '',\n  `<b>${esc(e.workflow_name)}</b>${e.node_name ? ` → ${esc(e.node_name)}` : ''}`,\n  `Class: <code>${esc(e.error_class)}</code>`,\n  `<pre>${esc(cut(e.error_message, 600))}</pre>`,\n];\n\nif (e.execution_url) lines.push(`<a href=\"${esc(e.execution_url)}\">Open execution ${esc(e.execution_id)}</a>`);\n\nreturn [{ json: { text: lines.join('\\n') } }];\n"
+      },
+      "name": "Build fallback alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        220
+      ],
+      "id": "8b24ab3e-dc3c-5ef9-b47f-c3ae2db2c29b"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegram_chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "name": "Send fallback alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        220
+      ],
+      "id": "1dad6006-ccff-59b3-9e40-8a3d0a40f90d",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize error": {
+      "main": [
+        [
+          {
+            "node": "Upsert incident",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert incident": {
+      "main": [
+        [
+          {
+            "node": "Should alert?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build fallback alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should alert?": {
+      "main": [
+        [
+          {
+            "node": "Build alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No alert needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build alert": {
+      "main": [
+        [
+          {
+            "node": "Send alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send alert": {
+      "main": [
+        [
+          {
+            "node": "Mark alerted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build fallback alert": {
+      "main": [
+        [
+          {
+            "node": "Send fallback alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {}
+}
