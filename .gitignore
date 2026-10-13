@@ -6,3 +6,6 @@ node_modules/
 dist/
 *.log
 .DS_Store
+next-env.d.ts
+*.tsbuildinfo
+__pycache__/
