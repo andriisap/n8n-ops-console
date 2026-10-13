@@ -7,6 +7,7 @@ What happens when things break, and how each case was verified. "Live" means tes
 | Same problem fails repeatedly | One incident, `occurrences` grows, one alert | Live, 2026-10-13: 10 runs × 4 workflows → 4 incidents with occurrences = 10, 4 messages |
 | Same execution reported twice | Second report is a no-op (UNIQUE on execution_id) | Unit: `test_upsert_incident.py` |
 | Resolved incident fails again | Reopens, `reopened_count + 1`, one 🟠 alert | Live, 2026-10-13: chaos-auth → "Reopened incident #3 (reopened 1×)" |
+| Operator resolves in the dashboard, the problem comes back | Status written by the restricted role; next failure reopens it, alerts, and the dashboard shows it as open again within 10 s | Live, 2026-10-13: chaos-429 resolved twice from ops.srv1878746.hstgr.cloud → "reopened 1×" at 15:32, "reopened 2×" at 15:44 |
 | Incident marked ignored | Keeps counting, never alerts | Unit: `test_upsert_incident.py` |
 | Ops database down | 3 retries, then fallback ⚠️ alert without dedup, with the cause | Live, 2026-10-13: `docker stop` on ops-db → "DB error: getaddrinfo EAI_AGAIN ops-db" within ~10 s |
 | Error message wording varies (ids, timestamps, durations) | Normalized before fingerprinting, stays one incident | Unit: `normalize-error.test.js` |
