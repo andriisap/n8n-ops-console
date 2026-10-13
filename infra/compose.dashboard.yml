@@ -1,0 +1,27 @@
+# Dashboard service. Paste into the same compose file as n8n and ops-db.
+#
+# No `ports:` on purpose: publishing a port would let anyone who knows the
+# server IP skip traefik and its password. Traefik reaches the container
+# over the docker network.
+#
+# The image tag is pinned to a commit (sha-xxxxxxx from the GitHub Actions run),
+# never :latest, so a deploy is always a known version and can be rolled back.
+
+services:
+  dashboard:
+    image: ghcr.io/andriisap/n8n-ops-console-dashboard:sha-REPLACE
+    restart: unless-stopped
+    depends_on:
+      ops-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://ops_dashboard:${OPS_DASHBOARD_DB_PASSWORD}@ops-db:5432/ops
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-dashboard.rule=Host(`ops.${TRAEFIK_HOST}`)
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-dashboard.entrypoints=websecure
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-dashboard.tls.certresolver=letsencrypt
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-dashboard.middlewares=${COMPOSE_PROJECT_NAME}-dashboard-auth
+      # htpasswd output with every $ doubled to $$, see docs/stage-3-checklist.md
+      - traefik.http.middlewares.${COMPOSE_PROJECT_NAME}-dashboard-auth.basicauth.users=${OPS_DASHBOARD_BASIC_AUTH}
+      - traefik.http.services.${COMPOSE_PROJECT_NAME}-dashboard.loadbalancer.server.port=3000

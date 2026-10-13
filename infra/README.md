@@ -4,8 +4,13 @@
 | --- | --- |
 | `compose.ops-db.yml` | Postgres service for Ops Console data. Merge into the n8n compose file |
 | `.env.example` | variables the compose file expects |
+| `compose.dashboard.yml` | dashboard service behind traefik with basic auth |
 | `migrations/001_init.sql` | schema: incidents, error_events, retry_queue, model_prices, llm_usage, heartbeats |
+| `migrations/002_dashboard_role.sql` | `ops_dashboard` role: read all, update incident status only |
 | `tests/001_schema_checks.sql` | checks dedup, idempotency, constraints and triggers inside a rolled-back transaction |
+| `tests/002_dashboard_role_checks.sql` | tries every action the dashboard role must not be able to do |
+| `tests/test_upsert_incident.py` | behaviour of the error handler's upsert query |
+| `dev/seed_demo_data.py` | realistic incidents for local dashboard work |
 
 ## Tables
 

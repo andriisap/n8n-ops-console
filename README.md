@@ -2,7 +2,7 @@
 
 Reliability layer for self-hosted n8n: one error workflow for every workflow, incidents grouped by fingerprint, retries with backoff, LLM cost per run, and a Next.js dashboard on top.
 
-Status: stage 2 of 8 (central error workflow). Tested on n8n 2.42.5.
+Status: stage 3 of 8 (dashboard). Tested on n8n 2.42.5.
 
 ## How a failure flows
 
@@ -13,6 +13,27 @@ any workflow fails
   → upsert incident by fingerprint, insert event by execution id
   → new or reopened? → Telegram alert → mark alerted
   → database down?   → fallback Telegram alert, no dedup
+
+dashboard (Next.js, ops.<host>)
+  → reads incidents and events as a read-mostly role
+  → Resolve / Ignore / Reopen, refreshes every 10 s
+```
+
+## Dashboard
+
+| Part | Choice |
+| --- | --- |
+| App | Next.js 16 App Router, server components query Postgres, one server action writes |
+| Database access | `ops_dashboard` role: SELECT everywhere, UPDATE on `incidents.status` and `resolved_at` only |
+| Delivery | GitHub Actions → GHCR image tagged `sha-<commit>` → pulled by the server |
+| Access | Traefik basic auth, HTTPS from Let's Encrypt, no published port |
+
+Local development against a scratch database:
+
+```bash
+python3 infra/dev/seed_demo_data.py          # fills a scratch DB with realistic incidents
+cd dashboard && cp .env.example .env.local   # set DATABASE_URL
+npm install && npm run dev
 ```
 
 What happens when each piece breaks, and how it was verified on the live instance: [docs/failure-modes.md](docs/failure-modes.md).
@@ -37,7 +58,7 @@ python3 scripts/build-error-handler.py
 | --- | --- |
 | `infra/` | docker-compose, SQL migrations (stage 1+) |
 | `workflows/` | exported n8n workflow JSON. `chaos/` fails on purpose, `ops/` is the console itself |
-| `dashboard/` | Next.js app (stage 3+) |
+| `dashboard/` | Next.js app, built into a Docker image by `.github/workflows/dashboard-image.yml` |
 | `scripts/` | helper scripts, e.g. firing the chaos workflows |
 | `docs/` | decisions, stage checklists, failure modes |
 

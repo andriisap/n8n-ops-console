@@ -57,3 +57,23 @@ The upsert node retries 3 times, then routes to an error output that sends a fal
 ## 014. Classification rules are tested against messages captured from the real server (2026-10-13)
 
 The first live run classified chaos-timeout as `unknown`: n8n 2.42.5 reports an HTTP timeout as "The connection was aborted, perhaps the server is offline", not "timeout of 3000ms exceeded". Every message seen on the real instance now goes into `normalize-error.test.js` as a fixture, so a new n8n version that rewords errors breaks a test, not an alert.
+
+## 015. The dashboard gets its own database role (2026-10-13)
+
+`ops_dashboard` can read every table and update two columns: `incidents.status` and `incidents.resolved_at`. It can't insert, delete, edit events or change the schema. A bug or an injection in the web app is limited to what that role can do. `infra/tests/002_dashboard_role_checks.sql` tries each forbidden action.
+
+## 016. Server components read Postgres directly, no API layer (2026-10-13)
+
+The dashboard is a Next.js App Router app. Pages are server components that query the database; the only write is one server action. For a single internal tool an extra REST layer would add code without adding a consumer.
+
+## 017. Images are built in CI and pinned by commit (2026-10-13)
+
+GitHub Actions builds the dashboard on every push to `main` and publishes `ghcr.io/<owner>/n8n-ops-console-dashboard:sha-<commit>` plus `latest`. The server runs a `sha-` tag: a deploy is a known commit, and a rollback is changing one line.
+
+## 018. Login at the proxy, no published port (2026-10-13)
+
+Traefik basic auth guards `ops.<host>` before any request reaches the app. The service publishes no port, so the server IP can't be used to skip the login. Real user accounts and roles are out of scope until there is more than one operator.
+
+## 019. Next.js 16.3.8, TypeScript 5.9 (2026-10-13)
+
+Latest patch of the 16.3 line rather than 16.4.0, which was a week old. TypeScript 7 (the Go rewrite) is skipped until Next lists it as supported.
