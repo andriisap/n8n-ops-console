@@ -22,6 +22,8 @@ export type Incident = {
   last_alerted_at: Date | null;
 };
 
+export type RetryStatus = 'pending' | 'in_progress' | 'succeeded' | 'failed' | 'dead';
+
 export type ErrorEvent = {
   id: number;
   execution_id: string;
@@ -30,6 +32,16 @@ export type ErrorEvent = {
   error_message: string;
   error_raw: Record<string, unknown> | null;
   occurred_at: Date;
+  retry_of: string | null;              // set when this failure was itself a retry
+  // latest retry job for this execution, if any
+  retry_status: RetryStatus | null;
+  retry_kind: 'auto' | 'manual' | null;
+  retry_attempt: number | null;
+  retry_max: number | null;
+  retry_next_at: Date | null;
+  retry_execution_id: string | null;
+  retry_last_error: string | null;
+  recovered: boolean;                   // some retry of this execution succeeded
 };
 
 export function isStatus(v: unknown): v is Status {
@@ -71,14 +83,49 @@ export async function getIncident(id: number): Promise<Incident | null> {
 
 export async function listEvents(incidentId: number, limit = 50): Promise<ErrorEvent[]> {
   const { rows } = await db().query<ErrorEvent>(
-    `SELECT id::int, execution_id, execution_url, execution_mode, error_message, error_raw, occurred_at
-       FROM error_events
-      WHERE incident_id = $1
-      ORDER BY occurred_at DESC
+    `SELECT e.id::int, e.execution_id, e.execution_url, e.execution_mode, e.error_message,
+            e.error_raw, e.occurred_at, e.retry_of,
+            rq.status AS retry_status, rq.kind AS retry_kind, rq.attempt AS retry_attempt,
+            rq.max_attempts AS retry_max, rq.next_attempt_at AS retry_next_at,
+            rq.retry_execution_id, rq.last_error AS retry_last_error,
+            EXISTS (SELECT 1 FROM retry_queue s
+                     WHERE s.execution_id = e.execution_id AND s.status = 'succeeded') AS recovered
+       FROM error_events e
+       LEFT JOIN LATERAL (
+            SELECT status, kind, attempt, max_attempts, next_attempt_at, retry_execution_id, last_error
+              FROM retry_queue r
+             WHERE r.execution_id = e.execution_id
+             ORDER BY r.id DESC
+             LIMIT 1) rq ON true
+      WHERE e.incident_id = $1
+      ORDER BY e.occurred_at DESC
       LIMIT $2`,
     [incidentId, limit],
   );
   return rows;
+}
+
+export type ReplayResult = 'queued' | 'already_queued_or_not_replayable';
+
+// Asks the retry scheduler to run this execution again. The dashboard never calls n8n itself:
+// it holds no n8n API key, and every retry goes through one executor with one audit trail.
+// The database pins dashboard-made jobs to one manual attempt with the latest saved workflow.
+export async function requestReplay(eventId: number): Promise<ReplayResult> {
+  const { rowCount } = await db().query(
+    `INSERT INTO retry_queue (error_event_id, incident_id, execution_id, workflow_id, idempotency_key)
+     SELECT e.id, e.incident_id, e.execution_id, e.workflow_id,
+            'manual:' || e.execution_id || ':' || floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint
+       FROM error_events e
+      WHERE e.id = $1
+        AND e.retry_of IS NULL
+        AND e.execution_id NOT LIKE 'trigger:%'
+        AND NOT EXISTS (SELECT 1 FROM retry_queue s
+                         WHERE s.execution_id = e.execution_id AND s.status = 'succeeded')
+     ON CONFLICT DO NOTHING
+     RETURNING id`,
+    [eventId],
+  );
+  return rowCount === 1 ? 'queued' : 'already_queued_or_not_replayable';
 }
 
 // The only write the dashboard can make; the database role allows nothing else.

@@ -1,0 +1,428 @@
+{
+  "name": "ops-retry-scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ops-retry-scheduler\nEvery 30 s: lease up to 5 due jobs from `retry_queue`, call n8n's own API to retry each execution, record the outcome.\n\n- Backoff and give-up live in SQL (`finish-retry.sql`)\n- Telegram hears only the end: ✅ recovered or 💀 gave up\n- A rejected API key fails this run, so ops-error-handler alerts\n\nSuccessful runs are not saved (2,880 a day would only fill the database). Failed runs are.",
+        "height": 300,
+        "width": 480
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -420
+      ],
+      "id": "f79bfb97-401a-5c12-b77e-6ae5c1af974d"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 30
+            }
+          ]
+        }
+      },
+      "name": "Every 30 seconds",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b704e562-f2de-545e-a91e-5e812020e041"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d31b43d7-f373-53ae-b005-7207494266f8",
+              "name": "n8n_public_url",
+              "value": "PASTE_N8N_URL",
+              "type": "string"
+            },
+            {
+              "id": "65f70f72-109f-5e21-98e6-3afb6b78716a",
+              "name": "telegram_chat_id",
+              "value": "PASTE_CHAT_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "id": "fe244390-ad85-5dae-9dc9-f38d04cb6aac"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Postgres node \"Claim due retries\" in ops-retry-scheduler.\n-- Takes up to 5 due jobs and leases them: status in_progress + locked_at.\n--\n-- SKIP LOCKED: two scheduler runs at the same moment never take the same row.\n-- The lease is the status itself, committed right away, so a run that crashes mid-way\n-- doesn't hold row locks; its jobs are picked up again once the lease is 10 minutes old.\n-- The attempt counter goes up here, before the call, so a crash still counts as an attempt.\n\nWITH due AS (\n    SELECT id\n    FROM retry_queue\n    WHERE (status = 'pending' AND next_attempt_at <= now())\n       OR (status = 'in_progress' AND locked_at < now() - interval '10 minutes')\n    ORDER BY next_attempt_at\n    LIMIT 5\n    FOR UPDATE SKIP LOCKED\n)\nUPDATE retry_queue r\nSET status    = 'in_progress',\n    locked_at = now(),\n    attempt   = r.attempt + 1\nFROM due\nWHERE r.id = due.id\nRETURNING r.id, r.execution_id, r.workflow_id, r.incident_id, r.kind,\n          r.load_workflow, r.attempt, r.max_attempts;\n",
+        "options": {}
+      },
+      "name": "Claim due retries",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        440,
+        0
+      ],
+      "id": "e820d76a-88c9-5051-bb42-8198c3e20653"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a9fbdfa1-6a37-53ca-a776-9b86498a1bce",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "name": "Has job?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "37b02850-8d78-5355-8799-afc9456fcf82"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.n8n_public_url.replace(/\\/+$/, '') }}/api/v1/executions/{{ $json.execution_id }}/retry",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ loadWorkflow: $json.load_workflow }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "name": "Call retry API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "b57caedf-6cc4-5404-8ac1-6261507d5cbc",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Code node \"Evaluate result\" in ops-retry-scheduler. Mode: Run Once for Each Item.\n// Turns the response of POST /api/v1/executions/{id}/retry into one outcome for the job.\n// Behaviour of the endpoint, from the n8n 2.42.5 source:\n//   200 -> the retry ran to the end (the call waits for it); body.status = success | error | ...\n//   409 -> \"The execution succeeded, so it cannot be retried.\"            (already recovered)\n//          \"Execution is queued to run (not yet started) ...\"            (try again later)\n//          \"The execution was aborted before starting ...\"               (can never be retried)\n//   404 -> execution not found, e.g. pruned by execution data retention\n\nconst job = $('Claim due retries').item.json;\nconst res = $json;\n\nconst out = {\n  id: job.id,\n  outcome: 'failed',           // succeeded | failed | requeue | dead\n  retry_execution_id: null,\n  error: null,\n  api_key_rejected: false,\n};\n\nconst messageOf = (body) =>\n  typeof body === 'string' ? body : String(body?.message ?? body?.error ?? '');\n\nif (res.error) {\n  // HTTP node set to continue on error: network failure, timeout, DNS...\n  out.error = `request failed: ${messageOf(res.error) || JSON.stringify(res.error)}`;\n} else {\n  const code = Number(res.statusCode);\n  const body = res.body ?? {};\n  const msg = messageOf(body);\n\n  if (code === 200) {\n    out.retry_execution_id = body.id != null ? String(body.id) : null;\n    if (body.status === 'success') {\n      out.outcome = 'succeeded';\n    } else {\n      out.error = `retry execution ${body.id ?? '?'} ended with status ${body.status ?? 'unknown'}`;\n    }\n  } else if (code === 409 && /succeeded/i.test(msg)) {\n    out.outcome = 'succeeded';   // someone else already recovered it; nothing left to do\n  } else if (code === 409 && /queued/i.test(msg)) {\n    out.outcome = 'requeue';     // not our failure, don't spend an attempt\n    out.error = msg;\n  } else if (code === 409 && /aborted/i.test(msg)) {\n    out.outcome = 'dead';        // n8n has no data to retry from\n    out.error = msg;\n  } else if (code === 404) {\n    out.outcome = 'dead';\n    out.error = 'execution not found: it may have been pruned';\n  } else if (code === 401 || code === 403) {\n    out.outcome = 'requeue';     // our configuration problem: keep the job, fail the run loudly\n    out.api_key_rejected = true;\n    out.error = `n8n API rejected the API key (HTTP ${code}): unauthorized`;\n  } else {\n    out.error = `HTTP ${code}: ${msg}`;\n  }\n}\n\nif (out.error) out.error = out.error.slice(0, 1000);\nreturn { json: out };\n"
+      },
+      "name": "Evaluate result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "2e99eb04-b632-589a-8c00-425606e156b1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Postgres node \"Finish retry\" in ops-retry-scheduler.\n-- $1 = {id, outcome, retry_execution_id, error} from \"Evaluate result\".\n--\n-- Backoff is decided here, in one place: base * 2^(attempt-1), capped at 30 min,\n-- with ±20 % jitter so jobs that failed together don't retry together.\n-- Base: 60 s for rate limits, 30 s otherwise. A transient failure is retried\n-- 30 s after it happens, then 30 s, 1, 2 and 4 min after each failed attempt:\n-- 5 attempts, given up ~8 min in (~16 min for rate limits).\n--\n-- Only touches a job that is still in_progress, so a late answer can't overwrite\n-- a job that another run has already re-leased and finished.\n\nWITH input AS (\n    SELECT (p->>'id')::bigint                  AS id,\n           p->>'outcome'                       AS outcome,\n           nullif(p->>'retry_execution_id', '') AS retry_execution_id,\n           left(p->>'error', 1000)              AS error\n    FROM (SELECT $1::jsonb AS p) AS src\n),\njob AS (\n    SELECT r.id,\n           CASE WHEN i.error_class = 'rate_limit' THEN 60 ELSE 30 END AS base_seconds,\n           i.error_class, i.workflow_name, i.node_name\n    FROM retry_queue r\n    JOIN incidents i ON i.id = r.incident_id\n    JOIN input inp ON inp.id = r.id\n),\nupd AS (\n    UPDATE retry_queue r\n    SET status = CASE\n            WHEN inp.outcome = 'succeeded' THEN 'succeeded'\n            WHEN inp.outcome = 'dead'      THEN 'dead'\n            WHEN inp.outcome = 'requeue'   THEN 'pending'\n            WHEN r.attempt >= r.max_attempts THEN 'dead'\n            ELSE 'pending'\n        END,\n        -- a requeue was not a real attempt: give it back\n        attempt = CASE WHEN inp.outcome = 'requeue' THEN greatest(r.attempt - 1, 0) ELSE r.attempt END,\n        next_attempt_at = CASE\n            WHEN inp.outcome = 'requeue' THEN now() + interval '1 minute'\n            ELSE now() + make_interval(secs =>\n                     least(1800, j.base_seconds * power(2, greatest(r.attempt - 1, 0)))\n                     * (0.8 + random() * 0.4))\n        END,\n        locked_at          = NULL,\n        last_attempt_at    = now(),\n        last_error         = CASE WHEN inp.outcome = 'succeeded' THEN NULL ELSE inp.error END,\n        retry_execution_id = coalesce(inp.retry_execution_id, r.retry_execution_id)\n    FROM input inp, job j\n    WHERE r.id = inp.id AND r.status = 'in_progress'\n    RETURNING r.id, r.status, r.attempt, r.max_attempts, r.kind, r.execution_id, r.workflow_id,\n              r.retry_execution_id, r.last_error, r.next_attempt_at, r.incident_id\n)\nSELECT u.id, u.status, u.attempt, u.max_attempts, u.kind, u.execution_id, u.workflow_id,\n       u.retry_execution_id, u.last_error, u.next_attempt_at, u.incident_id,\n       j.workflow_name, j.node_name, j.error_class,\n       u.status IN ('succeeded', 'dead') AS notify\nFROM upd u\nJOIN job j USING (id);\n",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "name": "Finish retry",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "c3863d9f-8b06-5ad6-b8cd-d776df96be84",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "11a71f05-bb95-5166-89c7-d84c0b26240e",
+              "leftValue": "={{ $json.notify }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "name": "Notify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        -120
+      ],
+      "id": "368330cf-4483-536c-96c0-31853219a8bd"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Code node \"Build retry alert\" in ops-retry-scheduler. Mode: Run Once for Each Item.\n// Telegram hears about the end of a retry story only: recovered, or given up.\n\nconst r = $json;\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst base = $('Config').first().json.n8n_public_url.replace(/\\/+$/, '');\nconst link = (id) => `${base}/workflow/${encodeURIComponent(r.workflow_id)}/executions/${encodeURIComponent(id)}`;\n\nconst who = `<b>${esc(r.workflow_name)}</b>${r.node_name ? ` → ${esc(r.node_name)}` : ''}`;\nconst how = r.kind === 'manual' ? 'manual replay' : `attempt ${r.attempt}/${r.max_attempts}`;\n\nconst lines = r.status === 'succeeded'\n  ? [\n      `✅ <b>Recovered</b> · incident #${r.incident_id}`,\n      who,\n      `Execution ${esc(r.execution_id)} succeeded on ${how}.`,\n    ]\n  : [\n      `💀 <b>Gave up retrying</b> · incident #${r.incident_id}`,\n      who,\n      `Execution ${esc(r.execution_id)} still fails after ${how}.`,\n      r.last_error ? `<code>${esc(String(r.last_error).slice(0, 300))}</code>` : '',\n    ];\n\nif (r.retry_execution_id) lines.push(`<a href=\"${esc(link(r.retry_execution_id))}\">Open retry execution ${esc(r.retry_execution_id)}</a>`);\n\nreturn { json: { text: lines.filter(Boolean).join('\\n') } };\n"
+      },
+      "name": "Build retry alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -120
+      ],
+      "id": "70e67f01-84bb-5193-99cd-c0d716d66a63"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegram_chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "name": "Send retry alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        -120
+      ],
+      "id": "1e116a37-09f1-55be-b7da-67b9a07e2421",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "26c33e47-fe47-5f26-b230-87cf62bd822c",
+              "leftValue": "={{ $('Evaluate result').item.json.api_key_rejected }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "name": "API key rejected?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        120
+      ],
+      "id": "54f82183-ce75-5d56-959e-5ba675b3ecba"
+    },
+    {
+      "parameters": {
+        "errorMessage": "n8n API rejected the API key (HTTP 401/403): unauthorized. Check the ops-n8n-api credential. Jobs stay queued and resume once it works."
+      },
+      "name": "Fail loudly",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        120
+      ],
+      "id": "54e53704-e480-502f-9bfc-45ae37e0f1ea"
+    }
+  ],
+  "connections": {
+    "Every 30 seconds": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Claim due retries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim due retries": {
+      "main": [
+        [
+          {
+            "node": "Has job?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has job?": {
+      "main": [
+        [
+          {
+            "node": "Call retry API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Call retry API": {
+      "main": [
+        [
+          {
+            "node": "Evaluate result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate result": {
+      "main": [
+        [
+          {
+            "node": "Finish retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finish retry": {
+      "main": [
+        [
+          {
+            "node": "Notify?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "API key rejected?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify?": {
+      "main": [
+        [
+          {
+            "node": "Build retry alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build retry alert": {
+      "main": [
+        [
+          {
+            "node": "Send retry alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API key rejected?": {
+      "main": [
+        [
+          {
+            "node": "Fail loudly",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true
+  },
+  "pinData": {}
+}

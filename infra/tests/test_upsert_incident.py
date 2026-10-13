@@ -2,58 +2,39 @@
 """Behaviour tests for workflows/ops/src/upsert-incident.sql against a real Postgres.
 
 Runs the exact SQL the n8n node runs, with the JSON parameter bound the same way.
-Needs psql on PATH and a scratch database with 001_init applied.
+Needs psql on PATH and a scratch database with all migrations applied.
 
     PGHOST=... PGUSER=ops PGDATABASE=ops python3 infra/tests/test_upsert_incident.py
 
 The tables are cleaned at the start, so never point this at production data.
 """
-import json
 import pathlib
-import subprocess
+import sys
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
-SQL = (ROOT / "workflows/ops/src/upsert-incident.sql").read_text().strip().rstrip(";")
-COLS = ["incident_id", "status", "occurrences", "reopened_count", "is_new",
-        "is_reopened", "error_event_id", "duplicate", "should_alert"]
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from _db import check, reset, run_query_file, scalar, psql  # noqa: E402
 
-
-def psql(script, **variables):
-    args = ["psql", "-X", "-q", "-At", "-v", "ON_ERROR_STOP=1", "-F", "|"]
-    for name, value in variables.items():
-        args += ["-v", f"{name}={value}"]   # passed raw, no quoting rules to get wrong
-    out = subprocess.run(args, input=script, capture_output=True, text=True)
-    if out.returncode != 0:
-        raise RuntimeError(out.stderr)
-    return [line for line in out.stdout.splitlines() if line]
+COLS = ["incident_id", "status", "occurrences", "reopened_count", "is_new", "is_reopened",
+        "error_event_id", "duplicate", "is_retry", "retry_enqueued", "should_alert"]
 
 
-def upsert(execution_id, error_class="transient", normalized="timeout of <n>ms exceeded"):
+def upsert(execution_id, error_class="transient", normalized="timeout of <n>ms exceeded", retry_of=None):
     payload = {
         "execution_id": execution_id, "workflow_id": "wf1", "workflow_name": "chaos-timeout",
         "node_name": "Call slow API", "error_class": error_class,
         "error_message": "timeout of 3000ms exceeded, it's a \"quoted\" message",
         "normalized_message": normalized, "execution_url": f"https://n8n.example/e/{execution_id}",
-        "execution_mode": "webhook", "error_raw": {"message": "x"},
+        "execution_mode": "retry" if retry_of else "webhook", "retry_of": retry_of,
+        "error_raw": {"message": "x"},
     }
-    # PREPARE keeps $1 a real bind parameter, exactly as the n8n Postgres node sends it.
-    rows = psql(f"PREPARE upsert(jsonb) AS\n{SQL};\nEXECUTE upsert(:'payload');\n",
-                payload=json.dumps(payload))
+    rows = run_query_file("workflows/ops/src/upsert-incident.sql", payload, COLS)
     assert len(rows) == 1, f"expected exactly one row, got {rows}"
-    values = rows[0].split("|")
-    return dict(zip(COLS, values))
+    return rows[0]
 
 
-def scalar(query):
-    return psql(query)[0]
+reset()
 
-
-def check(label, cond):
-    assert cond, label
-    print(f"ok  {label}")
-
-
-psql("TRUNCATE incidents, error_events, retry_queue RESTART IDENTITY CASCADE;")
+# --- dedup, idempotency, reopen (stage 2) ---------------------------------------------
 
 r = upsert("100")
 check("1st failure creates an incident and alerts", r["is_new"] == "t" and r["should_alert"] == "t")
@@ -96,5 +77,50 @@ check("quotes and commas in messages are stored intact",
       scalar("SELECT error_message FROM error_events WHERE execution_id = '300';")
       == "timeout of 3000ms exceeded, it's a \"quoted\" message")
 
-psql("TRUNCATE incidents, error_events, retry_queue RESTART IDENTITY CASCADE;")
+# --- retries (stage 4) ------------------------------------------------------------------
+
+reset()
+
+r = upsert("500")
+check("transient failure is queued for an automatic retry",
+      r["retry_enqueued"] == "t"
+      and scalar("SELECT kind || ' ' || status || ' ' || idempotency_key FROM retry_queue;")
+      == "auto pending auto:500")
+check("first transient retry waits about 30 s",
+      scalar("SELECT next_attempt_at - now() BETWEEN interval '25 seconds' AND interval '35 seconds' "
+             "FROM retry_queue WHERE execution_id = '500';") == "t")
+
+r = upsert("501", error_class="rate_limit", normalized="too many requests")
+check("rate-limit failure waits longer before its first retry (about 60 s)",
+      r["retry_enqueued"] == "t"
+      and scalar("SELECT next_attempt_at - now() > interval '55 seconds' "
+                 "FROM retry_queue WHERE execution_id = '501';") == "t")
+
+for cls, eid in [("auth", "502"), ("validation", "503"), ("unknown", "504")]:
+    r = upsert(eid, error_class=cls, normalized=f"{cls} problem")
+    check(f"{cls} failure is NOT retried automatically", r["retry_enqueued"] == "f")
+
+before = scalar("SELECT occurrences FROM incidents WHERE id = (SELECT incident_id FROM error_events WHERE execution_id = '500');")
+r = upsert("600", retry_of="500")
+check("a failed retry is recorded as history...",
+      r["is_retry"] == "t"
+      and scalar("SELECT retry_of FROM error_events WHERE execution_id = '600';") == "500")
+check("...but queues no new retry (no loop), adds no occurrence, sends no alert",
+      r["retry_enqueued"] == "f" and r["should_alert"] == "f"
+      and r["occurrences"] == before
+      and scalar("SELECT count(*) FROM retry_queue WHERE execution_id IN ('500', '600');") == "1")
+
+inc500 = scalar("SELECT incident_id FROM error_events WHERE execution_id = '500';")
+psql(f"UPDATE incidents SET status = 'resolved', resolved_at = now() WHERE id = {inc500};")
+r = upsert("601", retry_of="500")
+check("a failed retry does not reopen a resolved incident", r["status"] == "resolved" and r["should_alert"] == "f")
+
+psql(f"UPDATE incidents SET status = 'ignored' WHERE id = {inc500};")
+r = upsert("700")
+check("ignored incident gets no automatic retry", r["retry_enqueued"] == "f")
+
+r = upsert("trigger:wf1:1760000000000")
+check("trigger failure (no execution to retry) is not queued", r["retry_enqueued"] == "f")
+
+reset()
 print("\nall upsert tests passed")

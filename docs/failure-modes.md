@@ -13,6 +13,16 @@ What happens when things break, and how each case was verified. "Live" means tes
 | Error message wording varies (ids, timestamps, durations) | Normalized before fingerprinting, stays one incident | Unit: `normalize-error.test.js` |
 | Telegram API fails | 3 retries; `last_alerted_at` stays empty, so the miss is visible in the database | By design, not yet tested live |
 | Trigger node fails (no execution id) | Synthetic id `trigger:<workflow>:<time>`, still recorded | Unit |
+| Transient failure (rate limit, 5xx, timeout) | Queued automatically; retried 30 s after, then 30 s, 1, 2, 4 min apart (double for rate limits); ✅ on recovery, 💀 after 5 attempts, ~8 min in | Unit: `test_retry_queue.py` (backoff ranges, give-up, notify) |
+| A retry fails too | Recorded as history; no new retry, no occurrence, no reopen, no alert (no loop) | Unit: `test_upsert_incident.py` |
+| auth / validation failure | Never retried automatically; Replay button for after the fix | Unit: `test_upsert_incident.py`; browser test of Replay |
+| Replay clicked twice | One active job per execution (partial unique index) | Unit + browser test |
+| Dashboard tries to queue a forged execution | Trigger replaces it with the event's own execution; role can't set status, update or delete jobs | Unit: `test_retry_queue.py` |
+| Two scheduler runs overlap | `SKIP LOCKED`: work is split, never duplicated | Unit: parallel claim, 5 + 5 of 10 |
+| Scheduler dies mid-run | Leased jobs are picked up again after 10 min; the attempt still counts | Unit: stale lease reclaimed |
+| n8n API key wrong or revoked | Jobs keep their attempts and wait; the run fails, so ops-error-handler alerts | Unit: `retry-scheduler.test.js` |
+| Execution pruned before its retry | Job marked dead with the reason | Unit |
+| Server says `Retry-After: 120` | Not honoured: the Error Trigger payload carries no response headers | Known limitation (decision 024) |
 | n8n itself is down | Nothing inside n8n can notice | Not covered yet: external heartbeat in stage 6 |
 | Dashboard can't reach the database | Page stays up and says so; cause in `docker logs`; `/api/ready` returns 503 with the Postgres error code | Local, 2026-10-13: wrong password → "database unreachable" page, log `28P01 password authentication failed` |
 

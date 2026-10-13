@@ -164,6 +164,15 @@ details pre {
   max-height: 320px; overflow: auto;
 }
 
+.inline { display: inline; }
+.btn.sm { padding: 3px 10px; font-size: 12px; border-radius: 6px; }
+.retry { font-size: 12px; white-space: nowrap; }
+.retry.muted { color: var(--muted); }
+.retry.ok { color: var(--resolved); }
+.retry.wait { color: var(--c-transient); }
+.retry.bad { color: var(--open); }
+.retry-row { display: inline-flex; align-items: center; gap: 8px; }
+
 @media (max-width: 720px) {
   .hide-sm { display: none; }
   .msg { max-width: 220px; }

@@ -61,5 +61,18 @@ FROM (SELECT incident_id, min(occurred_at) AS first, max(occurred_at) AS last
 WHERE s.incident_id = i.id;
 UPDATE incidents SET status = 'resolved', resolved_at = now() WHERE workflow_name = 'daily-digest';
 UPDATE incidents SET status = 'ignored' WHERE workflow_name = 'weekly-report';
+
+-- Give the automatic retries a mix of endings, as after a day of real traffic.
+WITH ranked AS (
+    SELECT r.id, row_number() OVER (PARTITION BY r.incident_id ORDER BY r.id) AS n
+    FROM retry_queue r
+)
+UPDATE retry_queue r SET
+    status = CASE WHEN k.n % 3 = 1 THEN 'succeeded' WHEN k.n % 3 = 2 THEN 'dead' ELSE 'pending' END,
+    attempt = CASE WHEN k.n % 3 = 1 THEN 2 WHEN k.n % 3 = 2 THEN 5 ELSE 1 END,
+    retry_execution_id = CASE WHEN k.n % 3 <> 0 THEN (20000 + r.id)::text END,
+    last_error = CASE WHEN k.n % 3 = 2 THEN 'retry execution ended with status error' END,
+    next_attempt_at = now() + interval '50 seconds'
+FROM ranked k WHERE k.id = r.id;
 """)
 print("seeded", len(PROBLEMS), "incidents")

@@ -2,7 +2,7 @@
 
 Reliability layer for self-hosted n8n: one error workflow for every workflow, incidents grouped by fingerprint, retries with backoff, LLM cost per run, and a Next.js dashboard on top.
 
-Status: stage 3 of 8 (dashboard). Tested on n8n 2.42.5.
+Status: stage 4 of 8 (retries and Replay). Tested on n8n 2.42.5.
 
 ## How a failure flows
 
@@ -12,11 +12,17 @@ any workflow fails
   → normalize + classify (rate_limit / transient / auth / validation / unknown)
   → upsert incident by fingerprint, insert event by execution id
   → new or reopened? → Telegram alert → mark alerted
+  → rate_limit / transient? → queue an automatic retry (never for a failed retry)
   → database down?   → fallback Telegram alert, no dedup
 
+ops-retry-scheduler (every 30 s)
+  → lease due jobs (FOR UPDATE SKIP LOCKED)
+  → POST /api/v1/executions/{id}/retry, wait for the result
+  → recovered → ✅ · failed → backoff 30 s × 2^n ±20 % · 5th failure → 💀
+
 dashboard (Next.js, ops.<host>)
-  → reads incidents and events as a read-mostly role
-  → Resolve / Ignore / Reopen, refreshes every 10 s
+  → reads incidents, events and retry state as a read-mostly role
+  → Resolve / Ignore / Reopen, Replay (queues a job, holds no n8n key), refreshes every 10 s
 ```
 
 ## Dashboard
@@ -43,13 +49,18 @@ What happens when each piece breaks, and how it was verified on the live instanc
 ```bash
 node workflows/ops/src/normalize-error.test.js          # classification and normalization
 node workflows/ops/src/build-fallback-alert.test.js     # fallback message never prints [object Object]
-python3 infra/tests/test_upsert_incident.py             # dedup, idempotency, reopen (needs a scratch Postgres)
+node workflows/ops/src/retry-scheduler.test.js          # every n8n retry API answer → outcome; alert texts
+python3 infra/tests/test_upsert_incident.py             # dedup, idempotency, reopen, retry queueing, no loop
+python3 infra/tests/test_retry_queue.py                 # lease, backoff, give-up, parallel runs, Replay permissions
 ```
+
+The Python tests need a scratch Postgres with all migrations applied (they truncate the tables).
 
 After editing anything in `workflows/ops/src/`, rebuild the importable JSON:
 
 ```bash
 python3 scripts/build-error-handler.py
+python3 scripts/build-retry-scheduler.py
 ```
 
 ## Repo layout

@@ -78,6 +78,34 @@ Traefik basic auth guards `ops.<host>` before any request reaches the app. The s
 
 `/api/health` answers 200 whenever the Node process runs; the container healthcheck uses it. `/api/ready` checks the database and logs the reason when it fails. First deploy had one endpoint doing both: a wrong DB password made the container unhealthy, traefik silently dropped it, and the user saw a bare 404 with nothing in any log. Now the same fault shows "database unreachable" on the page and `28P01 password authentication failed` in `docker logs`.
 
+## 021. Retries go through n8n's public API, read from the source (2026-10-13)
+
+`POST /api/v1/executions/{id}/retry`, scope `execution:retry`, body `{loadWorkflow}`. In n8n 2.42.5 the call waits for the retry to finish and returns its status, so the scheduler knows the outcome in the same request. 409 means already succeeded, still queued, or aborted before starting; 404 means pruned. All of this is from `executions.public.controller.ts` and `execution.service.ts` at tag `n8n@2.42.5`, not from memory, because the docs page didn't say.
+
+## 022. A failed retry never queues another retry (2026-10-13)
+
+n8n runs the error workflow for retry-mode failures too, with `retryOf` set. Without a guard that is a loop: retry fails, handler queues a retry, it fails, and so on. The handler stores `retry_of`; a failure with it set is kept as history but queues nothing, adds no occurrence, reopens nothing and sends no alert. The attempt count belongs to the scheduler alone.
+
+## 023. Only rate_limit and transient are retried automatically (2026-10-13)
+
+A bad key or invalid JSON fails the same way every time; retrying it costs API calls and hides the real problem. Those get a Replay button for when a person has fixed the cause.
+
+## 024. Backoff lives in SQL: 30 s × 2^(n-1), ±20 % jitter, 5 attempts (2026-10-13)
+
+Base 60 s for rate limits. One query decides the next attempt, so the rule is in one place and covered by `test_retry_queue.py`. n8n's Error Trigger doesn't pass response headers, so `Retry-After` can't be honoured; the longer base for rate limits stands in for it.
+
+## 025. The dashboard queues a replay, it never calls n8n (2026-10-13)
+
+The dashboard holds no n8n API key. Replay inserts a job; the scheduler runs it within 30 s. One executor means one audit trail and one place to get retries right. A database trigger fills the job's execution from its event and pins dashboard jobs to one manual attempt, so even a compromised dashboard can only ask for a retry of something that really failed. A partial unique index allows one active job per execution, so double clicks queue once.
+
+## 026. Lease by status, not by holding locks (2026-10-13)
+
+`FOR UPDATE SKIP LOCKED` picks due jobs, which are marked `in_progress` and committed at once. Two runs never take the same job; a run that dies leaves jobs that are picked up again after 10 minutes. The attempt counter rises at claim time, so a crash still counts.
+
+## 027. The scheduler doesn't save successful runs (2026-10-13)
+
+It runs every 30 s: 2,880 executions a day that would only fill n8n's database. Failed runs are saved, and its error workflow is ops-error-handler, so a broken scheduler alerts like any other workflow.
+
 ## 019. Next.js 16.3.8, TypeScript 5.9 (2026-10-13)
 
 Latest patch of the 16.3 line rather than 16.4.0, which was a week old. TypeScript 7 (the Go rewrite) is skipped until Next lists it as supported.

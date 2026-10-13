@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { changeStatus } from '@/app/actions';
 import { ClassLabel, StatusBadge } from '@/components/Badges';
+import RetryCell from '@/components/RetryCell';
 import { ago, exact } from '@/lib/format';
 import { getIncident, listEvents, type Status } from '@/lib/incidents';
 
@@ -75,6 +76,7 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
                 <th>When</th>
                 <th className="hide-sm">Mode</th>
                 <th>Error</th>
+                <th>Retry</th>
               </tr>
             </thead>
             <tbody>
@@ -96,6 +98,7 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
                       </details>
                     )}
                   </td>
+                  <td><RetryCell event={e} incidentId={id} /></td>
                 </tr>
               ))}
             </tbody>
