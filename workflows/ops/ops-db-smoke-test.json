@@ -1,0 +1,91 @@
+{
+  "name": "ops-db-smoke-test",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ops-db smoke test\nWrites one row to `heartbeats`, then reads it back.\n\nPass: the last node shows `migrations = 001_init` and `seconds_ago` under 1.\n\nCredential: Postgres, host `ops-db`, port 5432, db/user `ops`, SSL disable.",
+        "height": 240,
+        "width": 420
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -300
+      ],
+      "id": "ec898f70-f786-41fe-838e-c01cd638213b"
+    },
+    {
+      "parameters": {},
+      "name": "Run test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "43fb2427-79d8-4ad8-8f17-f2ccf23ca551"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO heartbeats (source, details)\nVALUES ('n8n-smoke-test', jsonb_build_object('n8n_execution_id', $1::text))\nON CONFLICT (source) DO UPDATE\n   SET last_beat_at = now(),\n       details      = EXCLUDED.details\nRETURNING source, last_beat_at, details;",
+        "options": {
+          "queryReplacement": "={{ $execution.id }}"
+        }
+      },
+      "name": "Write heartbeat",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        0
+      ],
+      "id": "0228f2ef-5a2c-402b-890d-48a109c116f6"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    (SELECT string_agg(version, ', ' ORDER BY version) FROM schema_migrations) AS migrations,\n    h.source,\n    h.last_beat_at,\n    round(extract(epoch FROM now() - h.last_beat_at)::numeric, 3) AS seconds_ago,\n    h.details\nFROM heartbeats h\nWHERE h.source = 'n8n-smoke-test';",
+        "options": {}
+      },
+      "name": "Read it back",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        480,
+        0
+      ],
+      "id": "b240853d-c7cb-42af-ab03-efafa98d43bb"
+    }
+  ],
+  "connections": {
+    "Run test": {
+      "main": [
+        [
+          {
+            "node": "Write heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write heartbeat": {
+      "main": [
+        [
+          {
+            "node": "Read it back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

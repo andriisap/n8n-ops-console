@@ -20,4 +20,16 @@ Vercel Hobby doesn't allow commercial use, and hosting there would mean exposing
 
 ## 005. Chaos workflows use webhook triggers and httpbin (2026-10-08)
 
-Error workflows only fire on production executions, so manual runs can't test them. httpbin.org returns any status code or delay on request with no account. If httpbin is unreliable, a self-hosted httpbin container replaces it in stage 1.
+Error workflows only fire on production executions, so manual runs can't test them. httpbin.org returns any status code or delay on request with no account. If httpbin turns out unreliable, a self-hosted httpbin container replaces it.
+
+## 006. Postgres 17, no public port (2026-10-08)
+
+The postgres:18 image moved its data directory, which breaks the common `/var/lib/postgresql/data` volume mount. 17 is pinned until there is a reason to move. The service has no `ports:`, so only containers in the same compose project can reach it.
+
+## 007. Deduplication and idempotency live in the schema (2026-10-08)
+
+`incidents.fingerprint` is UNIQUE, so repeated failures become `occurrences + 1` through `ON CONFLICT`. `error_events.execution_id` is UNIQUE, so a second report of the same execution is a no-op. Workflows can't forget a rule the database enforces.
+
+## 008. Model prices are versioned by date (2026-10-08)
+
+`model_prices` has `valid_from` in its key. When a provider changes prices, past runs keep the cost they had. The table starts empty: prices are filled in stage 5 from the providers' own pages, not from memory.

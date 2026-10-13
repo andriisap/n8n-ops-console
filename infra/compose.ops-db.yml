@@ -1,0 +1,28 @@
+# Postgres for Ops Console data. Paste the `ops-db` service and the volume
+# into the same compose file as n8n, so both share the default network and
+# n8n reaches the database at host `ops-db`.
+#
+# No `ports:` on purpose: the database is reachable only from containers in
+# this compose project, never from the internet.
+#
+# Pinned to 17: the postgres:18 image changed its data directory layout,
+# which breaks the usual /var/lib/postgresql/data volume mount.
+
+services:
+  ops-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=ops
+      - POSTGRES_USER=ops
+      - POSTGRES_PASSWORD=${OPS_DB_PASSWORD}
+    volumes:
+      - ops_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ops -d ops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  ops_db_data:

@@ -2,14 +2,14 @@
 
 Reliability layer for self-hosted n8n: one error workflow for every workflow, incidents grouped by fingerprint, retries with backoff, LLM cost per run, and a Next.js dashboard on top.
 
-Status: stage 0 of 8 (setup). Tested on n8n 2.42.5.
+Status: stage 1 of 8 (ops database). Tested on n8n 2.42.5.
 
 ## Repo layout
 
 | Folder | What lives there |
 | --- | --- |
 | `infra/` | docker-compose, SQL migrations (stage 1+) |
-| `workflows/` | exported n8n workflow JSON. `chaos/` holds workflows that fail on purpose |
+| `workflows/` | exported n8n workflow JSON. `chaos/` fails on purpose, `ops/` is the console itself |
 | `dashboard/` | Next.js app (stage 3+) |
 | `scripts/` | helper scripts, e.g. firing the chaos workflows |
 | `docs/` | decisions, stage checklists, failure modes |
