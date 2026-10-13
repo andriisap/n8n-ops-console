@@ -74,6 +74,10 @@ GitHub Actions builds the dashboard on every push to `main` and publishes `ghcr.
 
 Traefik basic auth guards `ops.<host>` before any request reaches the app. The service publishes no port, so the server IP can't be used to skip the login. Real user accounts and roles are out of scope until there is more than one operator.
 
+## 020. Liveness and readiness are separate endpoints (2026-10-13)
+
+`/api/health` answers 200 whenever the Node process runs; the container healthcheck uses it. `/api/ready` checks the database and logs the reason when it fails. First deploy had one endpoint doing both: a wrong DB password made the container unhealthy, traefik silently dropped it, and the user saw a bare 404 with nothing in any log. Now the same fault shows "database unreachable" on the page and `28P01 password authentication failed` in `docker logs`.
+
 ## 019. Next.js 16.3.8, TypeScript 5.9 (2026-10-13)
 
 Latest patch of the 16.3 line rather than 16.4.0, which was a week old. TypeScript 7 (the Go rewrite) is skipped until Next lists it as supported.
