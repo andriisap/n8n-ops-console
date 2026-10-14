@@ -26,6 +26,15 @@ What happens when things break, and how each case was verified. "Live" means tes
 | n8n itself is down | Nothing inside n8n can notice | Not covered yet: external heartbeat in stage 6 |
 | Dashboard can't reach the database | Page stays up and says so; cause in `docker logs`; `/api/ready` returns 503 with the Postgres error code | Local, 2026-10-13: wrong password → "database unreachable" page, log `28P01 password authentication failed` |
 
+## Live runs of stage 4 (2026-10-14)
+
+| Run | What happened |
+| --- | --- |
+| chaos-timeout, execution 789 | 5 retries (792, 795, 800, 807, 819), gaps growing as designed, job dead ~8 min in, one 💀 message. 5 retry failures recorded with `retry_of = 789`, still one job in the queue: no loop. Occurrences 11 for 16 events: retries don't inflate the count |
+| chaos-flaky, execution 908 | Original and all 5 retries hit 503. Correct give-up, but bad luck for a demo (~3 % at 50/50, more when httpbin.org itself is overloaded). Led to chaos-recover, a deterministic outage, for demos |
+| chaos-recover, executions 975 and 989 | Two runs of a 75 s outage. Each time: retry 1 failed with 29 s / 24 s of outage left (979, 993), retry 2 succeeded (983, 997), "succeeded on attempt 2/5", one ✅ message per run. One 🔴 alert for the incident (#64): the second run hit the still-open incident and stayed quiet. Occurrences 2 for 4 events: the failed retries are history, not new occurrences |
+| chaos-auth, Replay on execution 775 | Clicked from the dashboard: `replay queued`, then within ~30 s retry 1007 failed (the key is wrong on purpose), cell shows `replay failed`, one 💀 "still fails after manual replay". The failed replay added no occurrence, did not re-alert the open incident and queued no automatic retry (auth is never retried on its own) |
+
 ## Bugs found by live tests
 
 | Date | Bug | Fix |

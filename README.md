@@ -2,7 +2,7 @@
 
 Reliability layer for self-hosted n8n: one error workflow for every workflow, incidents grouped by fingerprint, retries with backoff, LLM cost per run, and a Next.js dashboard on top.
 
-Status: stage 4 of 8 (retries and Replay). Tested on n8n 2.42.5.
+Status: stages 0–4 of 8 done (up to retries and Replay); next is stage 5, LLM cost per run. Tested on n8n 2.42.5.
 
 ## How a failure flows
 
@@ -83,7 +83,8 @@ Five workflows that each fail in one predictable way. Everything else in this re
 | chaos-timeout | `/webhook/chaos-timeout` | request timeout after 3 s |
 | chaos-invalid-json | `/webhook/chaos-invalid-json` | SyntaxError parsing a fake LLM reply |
 | chaos-auth | `/webhook/chaos-auth` | HTTP 401 Unauthorized |
-| chaos-flaky | `/webhook/chaos-flaky` | random 200 or 503 (for retry tests) |
+| chaos-flaky | `/webhook/chaos-flaky` | random 200 or 503 |
+| chaos-recover | `/webhook/chaos-recover?fail_until=<unix ms>` | 503 until that moment, then success: a retry that recovers every time. Fire with `scripts/fire-recover.sh` |
 
 Run all of them:
 

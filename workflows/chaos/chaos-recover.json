@@ -1,0 +1,65 @@
+{
+  "name": "chaos-recover",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## chaos-recover\nTransient outage that ends on its own: fails until `fail_until`, then passes.\nUsed to show an automatic retry recovering, every time.\n\nFire with `scripts/fire-recover.sh` (75 s outage).",
+        "height": 200,
+        "width": 400
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -340
+      ],
+      "id": "de60c6a1-e2b4-5908-9d4f-294c49516e64"
+    },
+    {
+      "parameters": {
+        "path": "chaos-recover",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "webhookId": "4e59c391-aca0-55c2-bc40-7e0bf56b1f2a",
+      "id": "a8e17204-01d2-5846-b2f7-332bbe8e0e79"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fails with a transient error until the moment given in ?fail_until (unix ms), then succeeds.\n// A retry re-runs this node with the same webhook input, so it sees the same fail_until:\n// early retries fail, a later one passes. Deterministic \"recovered\" for demos and tests.\n// Fire it with scripts/fire-recover.sh, which sets fail_until = now + 75 s.\nconst q = $('Webhook').first().json.query ?? {};\nconst until = Number(q.fail_until);\n\nif (!Number.isFinite(until) || until <= 0) {\n  throw new Error('chaos-recover needs ?fail_until=<unix ms>. Use scripts/fire-recover.sh');\n}\n\nconst left = Math.ceil((until - Date.now()) / 1000);\nif (left > 0) {\n  throw new Error(`HTTP 503 Service unavailable (simulated outage, ${left} s left)`);\n}\n\nreturn [{ json: { ok: true, recovered_at: new Date().toISOString() } }];\n"
+      },
+      "name": "Call recovering API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ],
+      "id": "d2122908-e6b3-5d51-8675-80702449e9b2"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call recovering API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
