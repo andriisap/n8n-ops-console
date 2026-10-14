@@ -1,0 +1,273 @@
+{
+  "name": "demo-ticket-triage",
+  "nodes": [
+    {
+      "id": "40fb4faa-87e0-51f9-a3d7-4e0c23afed58",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "97c5686a-1a19-5b98-a7a7-c88bd9e0a784",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo-ticket-triage",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "3a92e9c3-b143-5b1c-b96f-4a571c1b383e",
+      "name": "Ticket",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "44a1d6ad-030e-5dc4-a133-61c9687769bd",
+              "name": "ticket",
+              "type": "string",
+              "value": "={{ $json.body?.text || \"Hi, since this morning our team can't log in to the dashboard. We get 'session expired' right after entering the password. We have a client demo at 15:00, please help.\" }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "629582b8-e452-55c1-a499-03ed73312f75",
+      "name": "Classify ticket",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.ticket }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You triage customer support tickets. Answer with JSON only, no prose, no code fences: {\"category\": \"billing|bug|access|feature_request|other\", \"urgency\": \"low|normal|high\", \"summary\": \"<one sentence>\"}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1872e50c-a10d-5d0f-aab4-29a7f8450dcf",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        440,
+        220
+      ],
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      }
+    },
+    {
+      "id": "e52501be-5c6d-5820-a5c8-eb75e8556c59",
+      "name": "Parse classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// The classifier is asked for JSON, but a model can still wrap it in prose or fences.\nconst raw = String($json.text ?? '');\nconst match = raw.match(/\\{[\\s\\S]*\\}/);\nlet c = {};\ntry { c = match ? JSON.parse(match[0]) : {}; } catch (e) { c = {}; }\nreturn [{ json: {\n  ticket: $('Ticket').first().json.ticket,\n  category: c.category ?? 'other',\n  urgency: c.urgency ?? 'normal',\n  summary: c.summary ?? raw.slice(0, 200),\n} }];\n"
+      }
+    },
+    {
+      "id": "30f1d996-dfa0-539a-98ac-471d0ab0a1eb",
+      "name": "Draft reply",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Ticket ({{ $json.category }}, urgency {{ $json.urgency }}):\n\n{{ $json.ticket }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a support agent. Write a short, friendly first reply to the customer (at most 5 sentences). Acknowledge the problem, say what happens next, and do not promise anything you can't know. Plain text, no greeting line with a name."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f042f60f-12ea-5399-98f5-eb8b45bf7aa8",
+      "name": "Anthropic Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        980,
+        220
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-haiku-5-5"
+        },
+        "options": {
+          "maxTokensToSample": 400
+        }
+      }
+    },
+    {
+      "id": "ff762499-3f74-5926-bee6-016ad232e638",
+      "name": "Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1300,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6f329883-60fa-5c3f-81f7-059778cbe7eb",
+              "name": "category",
+              "type": "string",
+              "value": "={{ $('Parse classification').first().json.category }}"
+            },
+            {
+              "id": "70cec885-d94a-5a79-9c43-567605ebf9f2",
+              "name": "urgency",
+              "type": "string",
+              "value": "={{ $('Parse classification').first().json.urgency }}"
+            },
+            {
+              "id": "b189d2f3-b04b-5871-b9cd-35b9531ecda6",
+              "name": "summary",
+              "type": "string",
+              "value": "={{ $('Parse classification').first().json.summary }}"
+            },
+            {
+              "id": "fabf365f-b176-5b1f-ba30-2b0cfd3e0ab1",
+              "name": "reply",
+              "type": "string",
+              "value": "={{ $json.text }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5d131009-3324-50ef-9088-505bb94a1d89",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -260
+      ],
+      "parameters": {
+        "width": 520,
+        "height": 220,
+        "content": "## demo-ticket-triage\nTwo LLM calls per run, two providers: **Groq** classifies, **Claude** drafts the reply. Exists so the Ops Console cost meter has real spend to count.\n\nFire it with `scripts/fire-triage.sh`. Error workflow: ops-error-handler."
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticket": {
+      "main": [
+        [
+          {
+            "node": "Classify ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify ticket": {
+      "main": [
+        [
+          {
+            "node": "Parse classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse classification": {
+      "main": [
+        [
+          {
+            "node": "Draft reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft reply": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify ticket",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Draft reply",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
