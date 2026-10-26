@@ -23,3 +23,23 @@ export function exact(date: Date | string | null): string {
   if (!date) return '';
   return new Date(date).toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
 }
+
+// Money: cents once it's at least a cent, otherwise enough digits to see it (LLM calls
+// cost fractions of a cent). null = no price known, never shown as $0.
+export function usd(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return 'no price';
+  if (v === 0) return '$0';
+  if (Math.abs(v) >= 0.01) return `$${v.toFixed(2)}`;
+  if (Math.abs(v) >= 0.0001) return `$${v.toFixed(5)}`;
+  return `$${v.toPrecision(2)}`;
+}
+
+const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+export function count(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  return n < 10_000 ? Math.round(n).toLocaleString('en') : compact.format(n);
+}
+
+export function perMtok(v: number | null): string {
+  return v === null ? '—' : `$${Number(v.toFixed(4))}`;
+}

@@ -16,6 +16,7 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgres://ops_dashboard:${OPS_DASHBOARD_DB_PASSWORD}@ops-db:5432/ops
+      - N8N_PUBLIC_URL=${N8N_PUBLIC_URL:-}   # optional: execution links on /costs
     labels:
       - traefik.enable=true
       - traefik.http.routers.${COMPOSE_PROJECT_NAME}-dashboard.rule=Host(`ops.${TRAEFIK_HOST}`)
