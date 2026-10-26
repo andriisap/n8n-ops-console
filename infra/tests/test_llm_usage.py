@@ -55,13 +55,18 @@ check("still exactly 2 rows", scalar("SELECT count(*) FROM llm_usage") == "2")
 
 # Haiku 5.5, base tier: 123 in x $0.10 + 139 out x $0.50 per million = $0.0000818
 check("Claude call priced from the Haiku 5.5 base tier", cost("Anthropic Chat Model") == "0.00008180")
-check("Groq call has no price yet: NULL, not $0", cost("Groq Chat Model") == "NULL")
+# Groq gpt-oss-20b: 147 x $0.075 + 136 x $0.30 per million = $0.000051825
+check("Groq call priced from the gpt-oss-20b row", cost("Groq Chat Model") == "0.00005183")
 
-# A price added later applies to past runs (it is valid from before the run).
+# A model nobody priced yet: NULL, not $0. Adding its price later fixes past runs too.
+unpriced = copy.deepcopy(real)
+unpriced["id"] = "300"
+unpriced["data"]["resultData"]["runData"]["Groq Chat Model"][0]["inputOverride"]["ai_languageModel"][0][0]["json"]["options"]["model"] = "llama-new"
+record(extract(unpriced))
+check("unknown model: NULL, not $0", cost("Groq Chat Model", "300") == "NULL")
 psql("INSERT INTO model_prices (provider, model, valid_from, input_per_mtok, output_per_mtok, source_url) "
-     "VALUES ('groq', 'openai/gpt-oss-20b', '2026-01-01', 0.075, 0.30, 'test');")
-# 147 x 0.075 + 136 x 0.30 = 11.025 + 40.8 = 51.825 per million
-check("price added later applies to a past run", cost("Groq Chat Model") == "0.00005183")
+     "VALUES ('groq', 'llama-new', '2026-01-01', 1, 1, 'test');")
+check("price added later applies to a past run", cost("Groq Chat Model", "300") == "0.00028300")
 
 # A price change: the new row does not touch runs before its valid_from.
 psql("INSERT INTO model_prices (provider, model, valid_from, input_per_mtok, output_per_mtok, source_url) "

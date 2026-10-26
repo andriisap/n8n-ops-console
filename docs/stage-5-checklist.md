@@ -9,15 +9,23 @@ Plan: [decisions 028–031](decisions.md). Each step is one pull request.
 - [x] `./scripts/fire-triage.sh` → HTTP 200 with category and reply
 - [x] `./scripts/fetch-execution.sh <id>` → both model nodes report real `tokenUsage` (Groq 147 / 136, Claude 123 / 139 in execution 35791)
 
-## 2. Database: usage, prices, scans
+## 2. Database: usage, prices, scans (PR #2)
 
-- [ ] `git pull` on the Mac
-- [ ] `pbcopy < infra/migrations/004_costs.sql` → `docker exec -it n8n-bet6-ops-db-1 psql -U ops -d ops` → paste → ends with `COMMIT`
-- [ ] Same for `infra/prices/model_prices.sql` → `INSERT 0 2`, `COMMIT`
-- [ ] Check: `SELECT provider, model, min_prompt_tokens, input_per_mtok, output_per_mtok FROM model_prices;` → 2 rows for claude-haiku-5-5
-- [ ] Groq price for `openai/gpt-oss-20b` from its page on console.groq.com → added to `model_prices.sql`
+- [x] `git pull` on the Mac
+- [x] `pbcopy < infra/migrations/004_costs.sql` → `docker exec -it n8n-bet6-ops-db-1 psql -U ops -d ops` → paste → ends with `COMMIT`
+- [x] Same for `infra/prices/model_prices.sql` → `INSERT 0 2`, `COMMIT`
+- [x] Check: 2 rows for claude-haiku-5-5
+- [x] Groq price for `openai/gpt-oss-20b` from its page in the Groq console → added to `model_prices.sql` (PR #3)
 
-## 3. ops-cost-collector workflow
+## 3. ops-cost-collector workflow (PR #3)
+
+- [ ] `git pull`; load prices again: `pbcopy < infra/prices/model_prices.sql` → paste into psql → `INSERT 0 3` (2 updated, Groq added)
+- [ ] Import `workflows/ops/ops-cost-collector.json`
+- [ ] Node **Config**: `n8n_public_url` = `https://n8n-bet6.srv1878746.hstgr.cloud`
+- [ ] Credentials: **Scan window**, **Pick unscanned**, **Record usage** → `ops-db`; **List executions**, **Get execution** → Header Auth `ops-n8n-api`
+- [ ] ⋯ → Settings → Error workflow → `ops-error-handler`; Save → **Publish**
+- [ ] Within 1–2 min: `SELECT count(*), sum(llm_calls) FROM cost_scans;` grows; `SELECT node_name, model, input_tokens, output_tokens, cost_usd FROM llm_usage_costed;` shows execution 35791 (2 rows, both priced)
+- [ ] `./scripts/fire-triage.sh 3` → 6 new rows within a minute or two
 
 ## 4. Daily budget alert
 

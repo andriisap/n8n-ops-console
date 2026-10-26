@@ -20,10 +20,13 @@ VALUES
     ('anthropic', 'claude-haiku-5-5', '2026-10-07', 0,
      0.10, 0.50, 0.125, 0.01, 'https://platform.claude.com/docs/en/about-claude/pricing'),
     ('anthropic', 'claude-haiku-5-5', '2026-10-07', 100001,
-     0.50, 2.50, 0.625, 0.05, 'https://platform.claude.com/docs/en/about-claude/pricing')
+     0.50, 2.50, 0.625, 0.05, 'https://platform.claude.com/docs/en/about-claude/pricing'),
 
-    -- Groq openai/gpt-oss-20b: added once confirmed on the model's page.
-    -- Until then its calls show "no price" in the dashboard, which is the point of NULL.
+    -- Groq openai/gpt-oss-20b. Cached input $0.037; Groq has no cache-write charge.
+    -- Checked 2026-10-26 on the model page in the Groq console. The date the price started
+    -- isn't published: valid_from is set before the first demo run.
+    ('groq', 'openai/gpt-oss-20b', '2026-10-01', 0,
+     0.075, 0.30, 0, 0.037, 'https://console.groq.com/docs/model/openai/gpt-oss-20b')
 ON CONFLICT (provider, model, valid_from, min_prompt_tokens) DO UPDATE SET
     input_per_mtok       = EXCLUDED.input_per_mtok,
     output_per_mtok      = EXCLUDED.output_per_mtok,
