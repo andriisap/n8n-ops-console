@@ -1,0 +1,17 @@
+{
+  "name": "ops-watchdog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "db:init": "wrangler d1 execute ops-watchdog --remote --file=schema.sql",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261011.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.149.0"
+  }
+}

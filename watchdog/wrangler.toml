@@ -1,0 +1,21 @@
+# Watchdog for the n8n Ops Console: runs on Cloudflare, outside the server it watches.
+name = "ops-watchdog"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[triggers]
+crons = ["* * * * *"]          # every minute
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ops-watchdog"
+database_id = "PASTE_DATABASE_ID"  # from: npx wrangler d1 create ops-watchdog
+
+[vars]
+N8N_URL = "https://n8n-bet6.srv1878746.hstgr.cloud"
+DASHBOARD_URL = "https://ops.srv1878746.hstgr.cloud"
+
+# Secrets, never in this file:
+#   npx wrangler secret put TELEGRAM_BOT_TOKEN
+#   npx wrangler secret put TELEGRAM_CHAT_ID
+#   npx wrangler secret put PING_KEY

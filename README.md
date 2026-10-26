@@ -64,6 +64,7 @@ python3 infra/tests/test_llm_usage.py                   # pricing by date and ti
 node workflows/ops/src/cost-collector.test.js           # listing pages → finished ids
 python3 infra/tests/test_cost_collector.py              # scan window, oldest-first batches of 25, no re-downloads
 python3 infra/tests/test_budget.py                      # one 💸 alert a day, retried until delivered
+(cd watchdog && npm test)                               # watchdog: silence and probe thresholds, alert once per change
 node workflows/ops/src/budget-alert.test.js             # alert text: amounts, top workflows, unpriced warning
 ```
 
@@ -85,6 +86,7 @@ python3 scripts/build-cost-collector.py
 | `workflows/` | exported n8n workflow JSON. `chaos/` fails on purpose, `ops/` is the console itself |
 | `dashboard/` | Next.js app, built into a Docker image by `.github/workflows/dashboard-image.yml` |
 | `scripts/` | helper scripts, e.g. firing the chaos workflows |
+| `watchdog/` | Cloudflare Worker that watches n8n from outside and alerts Telegram directly |
 | `docs/` | decisions, stage checklists, failure modes |
 
 ## Chaos workflows
