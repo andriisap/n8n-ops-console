@@ -1,0 +1,366 @@
+{
+  "name": "ops-cost-collector",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ops-cost-collector\nEvery minute: list finished executions through n8n's own API, download the ones not seen yet (25 per run, oldest first), and record every LLM call with its tokens.\n\n- No workflow needs changing: model nodes already record `tokenUsage`\n- Only model sub-nodes are counted; the chain node above repeats the same totals\n- Cost isn't stored: the `llm_usage_costed` view prices each call by its day and tier\n\nSuccessful runs are not saved. Failed runs are, and alert through ops-error-handler.",
+        "height": 300,
+        "width": 520
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -420
+      ],
+      "id": "f93bfe26-ed09-580e-8644-59c60db8a8b1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5816b218-d7b4-548b-bb15-9aec2d000c58"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ddc59db5-e633-5a09-b390-ddd95264c701",
+              "name": "n8n_public_url",
+              "value": "PASTE_N8N_URL",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "id": "8dccc747-014c-50cf-b931-90f2079e158c"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Postgres node \"Scan window\" in ops-cost-collector.\n-- Where to start listing executions: two hours before the newest execution already scanned,\n-- so a run that started earlier but finished after the last scan is still caught.\n-- Unscanned executions are taken oldest first (pick-unscanned.sql), so after downtime the\n-- frontier walks forward through the backlog instead of skipping it. First run: last 24 h.\nSELECT to_char(\n         (coalesce((SELECT max(started_at) FROM cost_scans), now() - interval '1 day')\n          - interval '2 hours') AT TIME ZONE 'UTC',\n         'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS started_after;\n",
+        "options": {}
+      },
+      "name": "Scan window",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        440,
+        0
+      ],
+      "id": "c7716e67-612f-5541-a5d0-b9c83a4e358a"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.n8n_public_url.replace(/\\/+$/, '') }}/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startedAfter",
+              "value": "={{ $json.started_after }}"
+            },
+            {
+              "name": "limit",
+              "value": "250"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "updateAParameterInEachRequest",
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "qs",
+                    "name": "cursor",
+                    "value": "={{ $response.body.nextCursor }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.nextCursor }}",
+              "limitPagesFetched": true,
+              "maxRequests": 20
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "name": "List executions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "bfbdb453-42a2-571f-a6c1-0e60bef9e080"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node \"Finished ids\" in ops-cost-collector (mode: run once for all items).\n// Input: one item per page of GET /api/v1/executions (pagination on), each {data, nextCursor}.\n// Output: ONE item {ids, listed} with the ids of finished executions.\n// Running ones are already left out by the API; waiting ones are left out here and\n// picked up by a later run once they finish.\nconst FINISHED = new Set(['success', 'error', 'crashed', 'canceled']);\nconst ids = new Set();\nlet listed = 0;\nfor (const page of $input.all()) {\n  for (const e of page.json?.data ?? []) {\n    listed++;\n    if (e?.id != null && FINISHED.has(e.status)) ids.add(String(e.id));\n  }\n}\nreturn [{ json: { ids: [...ids], listed } }];\n"
+      },
+      "name": "Finished ids",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "289275d4-28dd-5a67-9b36-6d9ad3d70097"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Postgres node \"Pick unscanned\" in ops-cost-collector.\n-- $1 = {ids: [...]} finished execution ids from the listing.\n-- Returns at most 25 that were never scanned, oldest first: each needs its full data\n-- downloaded, so a backlog is worked off over several runs instead of in one huge run.\nSELECT t.id\nFROM jsonb_array_elements_text(coalesce($1::jsonb->'ids', '[]'::jsonb)) AS t(id)\nWHERE t.id ~ '^[0-9]+$'\n  AND NOT EXISTS (SELECT 1 FROM cost_scans s WHERE s.execution_id = t.id)\nORDER BY t.id::bigint\nLIMIT 25;\n",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "name": "Pick unscanned",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "8a917d3b-11f2-50c9-8953-083b01da3453"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c48448f9-495e-5b96-a1f8-4ed1426c1b10",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "name": "Has id?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "c1c756e3-da2d-55b0-b2c1-0c3038c08b97"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.n8n_public_url.replace(/\\/+$/, '') }}/api/v1/executions/{{ $json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "includeData",
+              "value": "true"
+            },
+            {
+              "name": "ignoreDataSizeLimit",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "Get execution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        -100
+      ],
+      "id": "a526734c-4688-5766-87d0-cb1410d18d5e",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node \"Extract LLM calls\" in ops-cost-collector (mode: run once for all items).\n// Each input item is one execution from GET /api/v1/executions/{id}?includeData=true.\n// Output: ONE item {executions: [...], calls: [...]} for record-llm-usage.sql.\n//\n// Where the numbers come from (n8n 2.42.5, @n8n/ai-utilities n8n-llm-tracing.ts):\n// every model sub-node (Anthropic Chat Model, Groq Chat Model, ...) writes one run per\n// LLM call with data.ai_languageModel[0][0].json = { response, tokenUsage } — or\n// tokenUsageEstimate when the provider reported nothing (streaming). The chain node\n// above it repeats the same totals in metadata.tracing; it is NOT counted, or every\n// call would be counted twice.\n// The model id is in the run's inputOverride (options.model), which is what was really\n// sent; the node parameter can be an expression.\n\nconst FINISHED = new Set(['success', 'error', 'crashed', 'canceled']);\n\n// Node type → provider name used in model_prices.\nconst PROVIDERS = {\n  lmChatAnthropic: 'anthropic',\n  lmChatGroq: 'groq',\n  lmChatOpenAi: 'openai',\n  lmOpenAi: 'openai',\n  lmChatAzureOpenAi: 'azure-openai',\n  lmChatGoogleGemini: 'google',\n  lmChatGoogleVertex: 'google-vertex',\n  lmChatMistralCloud: 'mistral',\n  lmChatDeepSeek: 'deepseek',\n  lmChatOpenRouter: 'openrouter',\n  lmChatXAiGrok: 'xai',\n  lmChatAwsBedrock: 'bedrock',\n  lmChatOllama: 'ollama',\n  lmChatCohere: 'cohere',\n};\n\nfunction providerOf(nodeType) {\n  const short = String(nodeType ?? '').split('.').pop();\n  return PROVIDERS[short] ?? (short.replace(/^lm(Chat)?/, '').toLowerCase() || 'unknown');\n}\n\nfunction modelOf(run, node) {\n  const opts = run.inputOverride?.ai_languageModel?.[0]?.[0]?.json?.options ?? {};\n  let m = opts.model ?? opts.modelName ?? opts.model_name ?? opts.model_id;\n  if (!m) {\n    const p = node?.parameters?.model;\n    m = p && typeof p === 'object' ? p.value : p;\n  }\n  if (typeof m !== 'string' || m === '' || m.startsWith('=')) return 'unknown';\n  return m.replace(/^models\\//, '');\n}\n\nconst int = (v) => {\n  const n = Math.round(Number(v));\n  return Number.isFinite(n) && n > 0 ? n : 0;\n};\n\nconst executions = [];\nconst calls = [];\nconst skipped = [];\n\nfor (const item of $input.all()) {\n  const e = item.json ?? {};\n  const id = e.id != null ? String(e.id) : null;\n  if (!id) continue;\n  // Not finished yet (waiting, running): leave it for a later run instead of marking it scanned.\n  if (!FINISHED.has(e.status)) { skipped.push({ id, reason: `status ${e.status}` }); continue; }\n  // Over EXECUTIONS_DATA_MAX_DISPLAY_SIZE without ignoreDataSizeLimit, or redacted:\n  // no data means we can't know. Skip it rather than record \"no LLM calls\".\n  const runData = e.data?.resultData?.runData;\n  if (!runData) { skipped.push({ id, reason: 'no execution data' }); continue; }\n\n  const wf = e.workflowData ?? {};\n  const nodesByName = Object.fromEntries((wf.nodes ?? []).map((n) => [n.name, n]));\n  const startedAt = e.startedAt ?? e.createdAt;\n  let found = 0;\n\n  for (const [nodeName, runs] of Object.entries(runData)) {\n    (runs ?? []).forEach((run, runIndex) => {\n      const out = run?.data?.ai_languageModel?.[0]?.[0]?.json;\n      if (!out) return;                               // not a model node, or the call failed\n      const usage = out.tokenUsage ?? out.tokenUsageEstimate;\n      if (!usage) return;\n      const node = nodesByName[nodeName];\n      calls.push({\n        execution_id: id,\n        workflow_id: String(e.workflowId ?? wf.id ?? ''),\n        workflow_name: wf.name ?? null,\n        node_name: nodeName,\n        run_index: runIndex,\n        provider: providerOf(node?.type),\n        model: modelOf(run, node),\n        // Anthropic: n8n folds cache reads and writes into promptTokens, so they can't be\n        // priced separately (decision 030).\n        input_tokens: int(usage.promptTokens),\n        output_tokens: int(usage.completionTokens),\n        estimated: !out.tokenUsage,\n        execution_status: e.status,\n        started_at: startedAt,\n      });\n      found++;\n    });\n  }\n\n  executions.push({\n    execution_id: id,\n    workflow_id: String(e.workflowId ?? wf.id ?? ''),\n    workflow_name: wf.name ?? null,\n    execution_status: e.status,\n    started_at: startedAt,\n    llm_calls: found,\n  });\n}\n\nreturn [{ json: { executions, calls, skipped } }];\n"
+      },
+      "name": "Extract LLM calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -100
+      ],
+      "id": "b3172649-ed5c-5b97-b6a2-649dd1248d04"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Postgres node \"Record usage\" in ops-cost-collector.\n-- $1 = {executions: [...], calls: [...]} from \"Extract LLM calls\".\n--\n-- One statement, so calls and the \"scanned\" marks land together or not at all:\n-- an execution is never marked scanned while its calls are missing.\n-- Both inserts ignore rows already there, so reading an execution twice changes nothing.\n\nWITH input AS (\n    SELECT $1::jsonb AS j\n),\ncalls AS (\n    INSERT INTO llm_usage (execution_id, workflow_id, workflow_name, node_name, run_index,\n                           provider, model, input_tokens, output_tokens, estimated,\n                           execution_status, started_at)\n    SELECT c.execution_id, c.workflow_id, coalesce(c.workflow_name, ''), c.node_name, c.run_index,\n           c.provider, c.model, c.input_tokens, c.output_tokens, c.estimated,\n           c.execution_status, c.started_at\n    FROM input,\n         jsonb_to_recordset(coalesce(input.j->'calls', '[]'::jsonb)) AS c(\n             execution_id text, workflow_id text, workflow_name text, node_name text, run_index integer,\n             provider text, model text, input_tokens integer, output_tokens integer, estimated boolean,\n             execution_status text, started_at timestamptz)\n    ON CONFLICT (execution_id, node_name, run_index) DO NOTHING\n    RETURNING 1\n),\nscans AS (\n    INSERT INTO cost_scans (execution_id, workflow_id, workflow_name, execution_status, started_at, llm_calls)\n    SELECT s.execution_id, s.workflow_id, s.workflow_name, s.execution_status, s.started_at, s.llm_calls\n    FROM input,\n         jsonb_to_recordset(coalesce(input.j->'executions', '[]'::jsonb)) AS s(\n             execution_id text, workflow_id text, workflow_name text, execution_status text,\n             started_at timestamptz, llm_calls integer)\n    ON CONFLICT (execution_id) DO NOTHING\n    RETURNING 1\n)\nSELECT (SELECT count(*) FROM calls) AS calls_recorded,\n       (SELECT count(*) FROM scans) AS executions_recorded;\n",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "name": "Record usage",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1980,
+        -100
+      ],
+      "id": "34e2414b-c64e-5a08-9a79-e7decd08c8a0",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    }
+  ],
+  "connections": {
+    "Every minute": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Scan window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan window": {
+      "main": [
+        [
+          {
+            "node": "List executions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List executions": {
+      "main": [
+        [
+          {
+            "node": "Finished ids",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finished ids": {
+      "main": [
+        [
+          {
+            "node": "Pick unscanned",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick unscanned": {
+      "main": [
+        [
+          {
+            "node": "Has id?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has id?": {
+      "main": [
+        [
+          {
+            "node": "Get execution",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get execution": {
+      "main": [
+        [
+          {
+            "node": "Extract LLM calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract LLM calls": {
+      "main": [
+        [
+          {
+            "node": "Record usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true
+  },
+  "pinData": {}
+}

@@ -20,6 +20,11 @@ ops-retry-scheduler (every 30 s)
   → POST /api/v1/executions/{id}/retry, wait for the result
   → recovered → ✅ · failed → backoff 30 s × 2^n ±20 % · 5th failure → 💀
 
+ops-cost-collector (every minute)
+  → list finished executions (public API), download the ones not seen yet
+  → every model sub-node run = one LLM call: provider, model, tokens
+  → llm_usage_costed prices each call by its day and prompt-length tier
+
 dashboard (Next.js, ops.<host>)
   → reads incidents, events and retry state as a read-mostly role
   → Resolve / Ignore / Reopen, Replay (queues a job, holds no n8n key), refreshes every 10 s
@@ -54,6 +59,8 @@ python3 infra/tests/test_upsert_incident.py             # dedup, idempotency, re
 python3 infra/tests/test_retry_queue.py                 # lease, backoff, give-up, parallel runs, Replay permissions
 node workflows/ops/src/extract-llm-calls.test.js        # LLM calls from a real execution: no double count, estimates, failures
 python3 infra/tests/test_llm_usage.py                   # pricing by date and tier, idempotent recording, NULL for unknown prices
+node workflows/ops/src/cost-collector.test.js           # listing pages → finished ids
+python3 infra/tests/test_cost_collector.py              # scan window, oldest-first batches of 25, no re-downloads
 ```
 
 The Python tests need a scratch Postgres with all migrations applied (they truncate the tables).
@@ -63,6 +70,7 @@ After editing anything in `workflows/ops/src/`, rebuild the importable JSON:
 ```bash
 python3 scripts/build-error-handler.py
 python3 scripts/build-retry-scheduler.py
+python3 scripts/build-cost-collector.py
 ```
 
 ## Repo layout
