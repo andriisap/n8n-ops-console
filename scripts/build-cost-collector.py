@@ -48,6 +48,7 @@ Every minute: list finished executions through n8n's own API. Executions of work
 - No workflow needs changing: model nodes already record `tokenUsage`
 - Only model sub-nodes are counted; the chain node above repeats the same totals
 - Cost isn't stored: the `llm_usage_costed` view prices each call by its day and tier
+- Over `daily_budget_usd` today (UTC): one 💸 Telegram message a day, marked sent only after delivery
 
 Successful runs are not saved. Failed runs are, and alert through ops-error-handler."""
 
@@ -58,6 +59,9 @@ nodes = [
     node("Config", "n8n-nodes-base.set", 3.4, [220, 0], {
         "assignments": {"assignments": [
             {"id": nid("cfg-url"), "name": "n8n_public_url", "value": "PASTE_N8N_URL", "type": "string"},
+            {"id": nid("cfg-chat"), "name": "telegram_chat_id", "value": "PASTE_CHAT_ID", "type": "string"},
+            # Daily LLM spend (UTC day, all workflows) above which one 💸 message is sent.
+            {"id": nid("cfg-budget"), "name": "daily_budget_usd", "value": 1, "type": "number"},
         ]},
         "options": {},
     }),
@@ -121,6 +125,36 @@ nodes = [
         "query": src("record-llm-usage.sql"),
         "options": {"queryReplacement": "={{ JSON.stringify($json) }}"},
     }, retryOnFail=True, maxTries=3, waitBetweenTries=1000),
+    # Budget: a row comes back only when today is over budget and no alert was delivered yet.
+    node("Check budget", "n8n-nodes-base.postgres", 2.5, [2420, -100], {
+        "operation": "executeQuery",
+        "query": src("check-budget.sql"),
+        "options": {"queryReplacement":
+                    "={{ JSON.stringify({ daily_budget_usd: $('Config').first().json.daily_budget_usd }) }}"},
+    }),
+    node("Over budget?", "n8n-nodes-base.if", 2.2, [2640, -100], {
+        "conditions": {
+            "options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 2},
+            "conditions": [{"id": nid("over"), "leftValue": "={{ $json.day }}", "rightValue": "",
+                            "operator": {"type": "string", "operation": "exists", "singleValue": True}}],
+            "combinator": "and",
+        },
+        "looseTypeValidation": True,
+        "options": {},
+    }),
+    node("Build budget alert", "n8n-nodes-base.code", 2, [2860, -200],
+         {"mode": "runOnceForEachItem", "jsCode": src("build-budget-alert.js")}),
+    node("Send budget alert", "n8n-nodes-base.telegram", 1.2, [3080, -200], {
+        "chatId": "={{ $('Config').first().json.telegram_chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {"appendAttribution": False, "parse_mode": "HTML", "disable_web_page_preview": True},
+    }, retryOnFail=True, maxTries=3, waitBetweenTries=2000),
+    node("Mark budget alert sent", "n8n-nodes-base.postgres", 2.5, [3300, -200], {
+        "operation": "executeQuery",
+        "query": src("mark-budget-alert.sql"),
+        "options": {"queryReplacement":
+                    "={{ JSON.stringify({ day: $('Build budget alert').item.json.day, kind: $('Build budget alert').item.json.kind }) }}"},
+    }, retryOnFail=True, maxTries=3, waitBetweenTries=1000),
 ]
 
 
@@ -139,6 +173,11 @@ connections = {
     "Has id?": {"main": [[{"node": "Get execution", "type": "main", "index": 0}], []]},
     "Get execution": {"main": to("Extract LLM calls")},
     "Extract LLM calls": {"main": to("Record usage")},
+    "Record usage": {"main": to("Check budget")},
+    "Check budget": {"main": to("Over budget?")},
+    "Over budget?": {"main": [[{"node": "Build budget alert", "type": "main", "index": 0}], []]},
+    "Build budget alert": {"main": to("Send budget alert")},
+    "Send budget alert": {"main": to("Mark budget alert sent")},
 }
 
 workflow = {

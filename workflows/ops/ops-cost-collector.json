@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## ops-cost-collector\nEvery minute: list finished executions through n8n's own API. Executions of workflows with a model node are downloaded (25 per run, oldest first) and every LLM call recorded with its tokens; the rest are marked scanned straight from the listing.\n\n- No workflow needs changing: model nodes already record `tokenUsage`\n- Only model sub-nodes are counted; the chain node above repeats the same totals\n- Cost isn't stored: the `llm_usage_costed` view prices each call by its day and tier\n\nSuccessful runs are not saved. Failed runs are, and alert through ops-error-handler.",
+        "content": "## ops-cost-collector\nEvery minute: list finished executions through n8n's own API. Executions of workflows with a model node are downloaded (25 per run, oldest first) and every LLM call recorded with its tokens; the rest are marked scanned straight from the listing.\n\n- No workflow needs changing: model nodes already record `tokenUsage`\n- Only model sub-nodes are counted; the chain node above repeats the same totals\n- Cost isn't stored: the `llm_usage_costed` view prices each call by its day and tier\n- Over `daily_budget_usd` today (UTC): one 💸 Telegram message a day, marked sent only after delivery\n\nSuccessful runs are not saved. Failed runs are, and alert through ops-error-handler.",
         "height": 300,
         "width": 520
       },
@@ -45,6 +45,18 @@
               "name": "n8n_public_url",
               "value": "PASTE_N8N_URL",
               "type": "string"
+            },
+            {
+              "id": "049e6437-f613-5567-85e3-f77664babd60",
+              "name": "telegram_chat_id",
+              "value": "PASTE_CHAT_ID",
+              "type": "string"
+            },
+            {
+              "id": "d906d8ac-5f19-5906-bea7-0adfb5928bf6",
+              "name": "daily_budget_usd",
+              "value": 1,
+              "type": "number"
             }
           ]
         },
@@ -302,6 +314,114 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Postgres node \"Check budget\" in ops-cost-collector, after new usage is recorded.\n-- $1 = {daily_budget_usd} from Config.\n--\n-- Today = the current UTC day. Returns one row only when today's spend is over budget AND\n-- no alert for today has been delivered yet; otherwise no rows, and the run ends.\n-- The alert row is claimed here and marked sent only after Telegram confirms\n-- (mark-budget-alert.sql), so a failed send is retried by the next run, and a sent one is\n-- never repeated: one message per day.\nWITH input AS (\n    SELECT ($1::jsonb->>'daily_budget_usd')::numeric AS budget\n),\nbounds AS (\n    SELECT (now() AT TIME ZONE 'UTC')::date AS day,\n           date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS since\n),\ntoday AS (\n    SELECT coalesce(sum(u.cost_usd), 0)               AS spent,\n           count(*)                                   AS calls,\n           count(*) FILTER (WHERE u.cost_usd IS NULL) AS unpriced,\n           count(DISTINCT u.execution_id)             AS runs\n    FROM llm_usage_costed u, bounds b\n    WHERE u.started_at >= b.since\n),\ntop AS (\n    SELECT coalesce(jsonb_agg(t ORDER BY t.cost DESC), '[]'::jsonb) AS workflows\n    FROM (\n        SELECT u.workflow_name, sum(u.cost_usd) AS cost, count(DISTINCT u.execution_id) AS runs\n        FROM llm_usage_costed u, bounds b\n        WHERE u.started_at >= b.since\n        GROUP BY u.workflow_name\n        ORDER BY sum(u.cost_usd) DESC NULLS LAST\n        LIMIT 3\n    ) t\n),\nclaim AS (\n    INSERT INTO cost_alerts (day, kind, threshold, spent)\n    SELECT b.day, 'daily_budget', i.budget, t.spent\n    FROM bounds b, input i, today t\n    WHERE i.budget IS NOT NULL AND t.spent > i.budget\n    ON CONFLICT (day, kind) DO UPDATE\n        SET spent = EXCLUDED.spent, threshold = EXCLUDED.threshold\n        WHERE cost_alerts.sent_at IS NULL\n    RETURNING day, kind, threshold, spent\n)\nSELECT c.day::text AS day, c.kind, c.threshold, c.spent, t.calls, t.runs, t.unpriced, top.workflows\nFROM claim c, today t, top;\n",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ daily_budget_usd: $('Config').first().json.daily_budget_usd }) }}"
+        }
+      },
+      "name": "Check budget",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2420,
+        -100
+      ],
+      "id": "75f1a07f-e89c-5993-8893-52ea467f5166"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "59a6f0e1-b8e7-5466-9ee3-ecbade49f9fe",
+              "leftValue": "={{ $json.day }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "name": "Over budget?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        -100
+      ],
+      "id": "b604fbca-f8ed-5392-9ab1-15e36996494a"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Code node \"Build budget alert\" in ops-cost-collector (mode: run once for each item).\n// Input: one row from check-budget.sql. Output: {text} for Telegram, HTML parse mode.\nconst r = $json;\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst usd = (v) => {\n  if (v === null || v === undefined || v === '') return 'no price';\n  const n = Number(v);\n  if (!Number.isFinite(n)) return 'no price';\n  return n >= 0.01 ? `$${n.toFixed(2)}` : `$${n.toFixed(5)}`;\n};\n\nconst lines = [\n  `💸 <b>LLM budget exceeded</b> · ${esc(r.day)} (UTC)`,\n  `Spent ${usd(r.spent)} of ${usd(r.threshold)} today: ${r.calls} calls in ${r.runs} runs.`,\n];\nconst top = Array.isArray(r.workflows) ? r.workflows : [];\nif (top.length) {\n  lines.push('', 'Top workflows:');\n  for (const w of top) lines.push(`• ${esc(w.workflow_name || '(unnamed)')}: ${usd(w.cost)} in ${w.runs} runs`);\n}\nif (Number(r.unpriced) > 0) {\n  lines.push('', `⚠️ ${r.unpriced} calls have no price yet, so real spend is higher.`);\n}\nlines.push('', 'One message per day. The dashboard shows each run.');\nreturn { json: { text: lines.join('\\n'), day: r.day, kind: r.kind } };\n"
+      },
+      "name": "Build budget alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        -200
+      ],
+      "id": "bb1dab9c-dab1-5a3a-9cea-fe44c12881ae"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.telegram_chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML",
+          "disable_web_page_preview": true
+        }
+      },
+      "name": "Send budget alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3080,
+        -200
+      ],
+      "id": "57434d5a-dcae-56cc-9bb2-f4c0ec4b1830",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Postgres node \"Mark budget alert sent\", after Telegram confirmed delivery.\n-- $1 = {day, kind} from \"Check budget\".\nUPDATE cost_alerts\nSET sent_at = now()\nWHERE day = ($1::jsonb->>'day')::date\n  AND kind = $1::jsonb->>'kind'\n  AND sent_at IS NULL\nRETURNING day::text AS day, kind, sent_at;\n",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify({ day: $('Build budget alert').item.json.day, kind: $('Build budget alert').item.json.kind }) }}"
+        }
+      },
+      "name": "Mark budget alert sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3300,
+        -200
+      ],
+      "id": "56978113-aea5-5647-87f3-d4565b91e9f9",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     }
   ],
   "connections": {
@@ -410,6 +530,62 @@
         [
           {
             "node": "Record usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record usage": {
+      "main": [
+        [
+          {
+            "node": "Check budget",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check budget": {
+      "main": [
+        [
+          {
+            "node": "Over budget?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Over budget?": {
+      "main": [
+        [
+          {
+            "node": "Build budget alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build budget alert": {
+      "main": [
+        [
+          {
+            "node": "Send budget alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send budget alert": {
+      "main": [
+        [
+          {
+            "node": "Mark budget alert sent",
             "type": "main",
             "index": 0
           }

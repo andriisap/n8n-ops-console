@@ -24,6 +24,11 @@ What happens when things break, and how each case was verified. "Live" means tes
 | Execution pruned before its retry | Job marked dead with the reason | Unit |
 | Server says `Retry-After: 120` | Not honoured: the Error Trigger payload carries no response headers | Known limitation (decision 024) |
 | n8n itself is down | Nothing inside n8n can notice | Not covered yet: external heartbeat in stage 6 |
+| Same execution read twice by the cost collector | No-op: unique per (execution, node, run) | Unit: `test_llm_usage.py` |
+| Model without a known price | Cost NULL ("no price"), never $0; a price added later applies to past runs; budget alert names the unpriced calls | Unit: `test_llm_usage.py`, `test_budget.py` |
+| Cost collector down for hours | Picks up from the newest downloaded execution minus 2 h, oldest first; capped at 1 day back | Unit: `test_cost_collector.py`; live 2026-10-26: a day of backlog cleared in minutes |
+| API key lacks a scope the collector needs | Run fails with 403, ops-error-handler alerts | Live 2026-10-26: `workflow:list` missing → incident #69 |
+| Daily budget exceeded | One 💸 message a day; retried until Telegram confirms | Unit: `test_budget.py` |
 | Dashboard can't reach the database | Page stays up and says so; cause in `docker logs`; `/api/ready` returns 503 with the Postgres error code | Local, 2026-10-13: wrong password → "database unreachable" page, log `28P01 password authentication failed` |
 
 ## Live runs of stage 4 (2026-10-14)
