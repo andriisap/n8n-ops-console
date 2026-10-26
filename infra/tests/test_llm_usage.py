@@ -42,7 +42,7 @@ def reset():
     psql((ROOT / "infra/prices/model_prices.sql").read_text())
 
 
-real = json.loads((ROOT / "workflows/ops/src/fixtures/execution-demo-triage.json").read_text())
+real = json.loads((ROOT / "workflows/ops/src/fixtures/demo-triage-35791.json").read_text())
 
 reset()
 

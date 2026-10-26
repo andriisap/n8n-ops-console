@@ -112,7 +112,7 @@ Latest patch of the 16.3 line rather than 16.4.0, which was a week old. TypeScri
 
 ## 028. Costs are collected from n8n's execution data, not logged by each workflow (2026-10-26)
 
-The first plan was a `cost-meter` sub-workflow called after every LLM step. Reading n8n 2.42.5's source showed every model sub-node already records `tokenUsage` (or `tokenUsageEstimate`) and the model id in the execution data. `ops-cost-collector` reads finished executions through the public API and extracts the calls. No workflow has to change, a workflow someone forgets to instrument is still counted, and failed runs, which cost money too, are included. Only the model sub-node's runs are counted: the chain node above it repeats the same totals in `metadata.tracing`, and counting both would double every call. Captured on the real server and kept as a test fixture (`fixtures/execution-demo-triage.json`).
+The first plan was a `cost-meter` sub-workflow called after every LLM step. Reading n8n 2.42.5's source showed every model sub-node already records `tokenUsage` (or `tokenUsageEstimate`) and the model id in the execution data. `ops-cost-collector` reads finished executions through the public API and extracts the calls. No workflow has to change, a workflow someone forgets to instrument is still counted, and failed runs, which cost money too, are included. Only the model sub-node's runs are counted: the chain node above it repeats the same totals in `metadata.tracing`, and counting both would double every call. Captured on the real server and kept as a test fixture (`fixtures/demo-triage-35791.json`).
 
 ## 029. Cost is computed in a view, never stored (2026-10-26)
 

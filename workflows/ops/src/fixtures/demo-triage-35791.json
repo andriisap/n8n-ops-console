@@ -1,0 +1,770 @@
+{
+ "id": "35791",
+ "finished": true,
+ "mode": "webhook",
+ "retryOf": null,
+ "retrySuccessId": null,
+ "status": "success",
+ "createdAt": "2026-10-26T14:22:46.004Z",
+ "startedAt": "2026-10-26T14:22:46.095Z",
+ "stoppedAt": "2026-10-26T14:22:53.093Z",
+ "deletedAt": null,
+ "workflowId": "hbuLLmZWicq9fXSt",
+ "waitTill": null,
+ "storedAt": "db",
+ "tracingContext": null,
+ "deduplicationKey": null,
+ "jsonSizeBytes": 12506,
+ "binaryDataSizeBytes": 0,
+ "workflowVersionId": "2f2a18c7-1fe9-47d0-91d2-c3e8b26dd084",
+ "usedPrivateCredentials": false,
+ "data": {
+  "version": 1,
+  "startData": {},
+  "resultData": {
+   "runData": {
+    "Webhook": [
+     {
+      "startTime": 1793024566274,
+      "executionIndex": 0,
+      "source": [],
+      "hints": [],
+      "executionTime": 0,
+      "executionStatus": "success",
+      "data": {
+       "main": [
+        [
+         {
+          "json": {
+           "headers": {
+            "host": "n8n-bet6.srv1878746.hstgr.cloud",
+            "user-agent": "curl/8.7.1",
+            "content-length": "97",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "x-forwarded-for": "203.0.113.10",
+            "x-forwarded-host": "n8n-bet6.srv1878746.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "srv1878746",
+            "x-real-ip": "203.0.113.10",
+            "accept-encoding": "gzip"
+           },
+           "params": {},
+           "query": {},
+           "body": {
+            "text": "We were charged twice for the October invoice, order 4471. Please refund one of them."
+           },
+           "webhookUrl": "https://n8n-bet6.srv1878746.hstgr.cloud/webhook/demo-ticket-triage",
+           "executionMode": "production"
+          },
+          "pairedItem": {
+           "item": 0
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "Ticket": [
+     {
+      "startTime": 1793024566280,
+      "executionIndex": 1,
+      "source": [
+       {
+        "previousNode": "Webhook",
+        "previousNodeOutput": 0,
+        "previousNodeRun": 0
+       }
+      ],
+      "hints": [],
+      "executionTime": 38,
+      "executionStatus": "success",
+      "data": {
+       "main": [
+        [
+         {
+          "json": {
+           "ticket": "We were charged twice for the October invoice, order 4471. Please refund one of them."
+          },
+          "pairedItem": {
+           "item": 0
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "Groq Chat Model": [
+     {
+      "startTime": 1793024570731,
+      "executionTime": 441,
+      "executionIndex": 3,
+      "executionStatus": "success",
+      "source": [
+       {
+        "previousNode": "Classify ticket",
+        "previousNodeRun": 0
+       }
+      ],
+      "data": {
+       "ai_languageModel": [
+        [
+         {
+          "json": {
+           "response": {
+            "generations": [
+             [
+              {
+               "text": "{\"category\":\"billing\",\"urgency\":\"high\",\"summary\":\"Duplicate charge on October invoice for order 4471, request refund.\"}",
+               "generationInfo": {
+                "finish_reason": "stop"
+               }
+              }
+             ]
+            ]
+           },
+           "tokenUsage": {
+            "completionTokens": 136,
+            "promptTokens": 147,
+            "totalTokens": 283
+           }
+          }
+         }
+        ]
+       ]
+      },
+      "inputOverride": {
+       "ai_languageModel": [
+        [
+         {
+          "json": {
+           "messages": [
+            "System: You triage customer support tickets. Answer with JSON only, no prose, no code fences: {\"category\": \"billing|bug|access|feature_request|other\", \"urgency\": \"low|normal|high\", \"summary\": \"<one sentence>\"}\nHuman: We were charged twice for the October invoice, order 4471. Please refund one of them."
+           ],
+           "estimatedTokens": 77,
+           "options": {
+            "api_key": {
+             "lc": 1,
+             "type": "secret",
+             "id": [
+              "GROQ_API_KEY"
+             ]
+            },
+            "model": "openai/gpt-oss-20b",
+            "temperature": 0.7
+           }
+          }
+         }
+        ]
+       ]
+      },
+      "metadata": {
+       "subRun": [
+        {
+         "node": "Groq Chat Model",
+         "runIndex": 0
+        }
+       ]
+      }
+     }
+    ],
+    "Classify ticket": [
+     {
+      "startTime": 1793024566320,
+      "executionIndex": 2,
+      "source": [
+       {
+        "previousNode": "Ticket",
+        "previousNodeOutput": 0,
+        "previousNodeRun": 0
+       }
+      ],
+      "hints": [],
+      "executionTime": 4856,
+      "metadata": {
+       "tracing": {
+        "llm.tokens.in": 147,
+        "llm.tokens.out": 136,
+        "llm.tokens.total": 283,
+        "llm.tokens.estimated": false
+       }
+      },
+      "executionStatus": "success",
+      "data": {
+       "main": [
+        [
+         {
+          "json": {
+           "text": "{\"category\":\"billing\",\"urgency\":\"high\",\"summary\":\"Duplicate charge on October invoice for order 4471, request refund.\"}"
+          },
+          "pairedItem": {
+           "item": 0
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "Parse classification": [
+     {
+      "startTime": 1793024571176,
+      "executionIndex": 4,
+      "source": [
+       {
+        "previousNode": "Classify ticket",
+        "previousNodeOutput": 0,
+        "previousNodeRun": 0
+       }
+      ],
+      "hints": [],
+      "executionTime": 254,
+      "executionStatus": "success",
+      "data": {
+       "main": [
+        [
+         {
+          "json": {
+           "ticket": "We were charged twice for the October invoice, order 4471. Please refund one of them.",
+           "category": "billing",
+           "urgency": "high",
+           "summary": "Duplicate charge on October invoice for order 4471, request refund."
+          },
+          "pairedItem": {
+           "item": 0
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "Anthropic Chat Model": [
+     {
+      "startTime": 1793024571476,
+      "executionTime": 1582,
+      "executionIndex": 6,
+      "executionStatus": "success",
+      "source": [
+       {
+        "previousNode": "Draft reply",
+        "previousNodeRun": 0
+       }
+      ],
+      "data": {
+       "ai_languageModel": [
+        [
+         {
+          "json": {
+           "response": {
+            "generations": [
+             [
+              {
+               "text": "Thank you for flagging this, and I'm sorry you were charged twice for the October invoice on order 4471. I've noted the ticket as high urgency and passed it to our billing team to review the duplicate charge. Once they've confirmed the details, they'll let you know whether a refund can be issued and what timeline to expect. If you have the transaction IDs or bank statement lines for both charges, please reply with them to help speed up the review."
+              }
+             ]
+            ]
+           },
+           "tokenUsage": {
+            "completionTokens": 139,
+            "promptTokens": 123,
+            "totalTokens": 262
+           }
+          }
+         }
+        ]
+       ]
+      },
+      "inputOverride": {
+       "ai_languageModel": [
+        [
+         {
+          "json": {
+           "messages": [
+            "System: You are a support agent. Write a short, friendly first reply to the customer (at most 5 sentences). Acknowledge the problem, say what happens next, and do not promise anything you can't know. Plain text, no greeting line with a name.\nHuman: Ticket (billing, urgency high):\n\nWe were charged twice for the October invoice, order 4471. Please refund one of them."
+           ],
+           "estimatedTokens": 84,
+           "options": {
+            "anthropic_api_key": {
+             "lc": 1,
+             "type": "secret",
+             "id": [
+              "ANTHROPIC_API_KEY"
+             ]
+            },
+            "model": "claude-haiku-5-5",
+            "anthropic_api_url": "https://api.anthropic.com",
+            "max_tokens": 400,
+            "invocation_kwargs": {},
+            "client_options": {
+             "fetchOptions": {
+              "dispatcher": {
+               "_events": {},
+               "_eventsCount": 0
+              }
+             }
+            },
+            "streaming": false,
+            "api_key": {
+             "lc": 1,
+             "type": "secret",
+             "id": [
+              "ANTHROPIC_API_KEY"
+             ]
+            }
+           }
+          }
+         }
+        ]
+       ]
+      },
+      "metadata": {
+       "subRun": [
+        {
+         "node": "Anthropic Chat Model",
+         "runIndex": 0
+        }
+       ]
+      }
+     }
+    ],
+    "Draft reply": [
+     {
+      "startTime": 1793024571431,
+      "executionIndex": 5,
+      "source": [
+       {
+        "previousNode": "Parse classification",
+        "previousNodeOutput": 0,
+        "previousNodeRun": 0
+       }
+      ],
+      "hints": [],
+      "executionTime": 1629,
+      "metadata": {
+       "tracing": {
+        "llm.tokens.in": 123,
+        "llm.tokens.out": 139,
+        "llm.tokens.total": 262,
+        "llm.tokens.estimated": false
+       }
+      },
+      "executionStatus": "success",
+      "data": {
+       "main": [
+        [
+         {
+          "json": {
+           "text": "Thank you for flagging this, and I'm sorry you were charged twice for the October invoice on order 4471. I've noted the ticket as high urgency and passed it to our billing team to review the duplicate charge. Once they've confirmed the details, they'll let you know whether a refund can be issued and what timeline to expect. If you have the transaction IDs or bank statement lines for both charges, please reply with them to help speed up the review."
+          },
+          "pairedItem": {
+           "item": 0
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "Result": [
+     {
+      "startTime": 1793024573060,
+      "executionIndex": 7,
+      "source": [
+       {
+        "previousNode": "Draft reply",
+        "previousNodeOutput": 0,
+        "previousNodeRun": 0
+       }
+      ],
+      "hints": [],
+      "executionTime": 33,
+      "executionStatus": "success",
+      "data": {
+       "main": [
+        [
+         {
+          "json": {
+           "category": "billing",
+           "urgency": "high",
+           "summary": "Duplicate charge on October invoice for order 4471, request refund.",
+           "reply": "Thank you for flagging this, and I'm sorry you were charged twice for the October invoice on order 4471. I've noted the ticket as high urgency and passed it to our billing team to review the duplicate charge. Once they've confirmed the details, they'll let you know whether a refund can be issued and what timeline to expect. If you have the transaction IDs or bank statement lines for both charges, please reply with them to help speed up the review."
+          },
+          "pairedItem": {
+           "item": 0
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ]
+   },
+   "lastNodeExecuted": "Result"
+  },
+  "executionData": {
+   "contextData": {},
+   "nodeExecutionStack": [],
+   "metadata": {
+    "Groq Chat Model": [
+     {
+      "subRun": [
+       {
+        "node": "Groq Chat Model",
+        "runIndex": 0
+       }
+      ]
+     }
+    ],
+    "Anthropic Chat Model": [
+     {
+      "subRun": [
+       {
+        "node": "Anthropic Chat Model",
+        "runIndex": 0
+       }
+      ]
+     }
+    ]
+   },
+   "waitingExecution": {},
+   "waitingExecutionSource": {},
+   "runtimeData": {
+    "version": 1,
+    "establishedAt": 1793024565948,
+    "source": "webhook",
+    "triggerNode": {
+     "name": "Webhook",
+     "type": "n8n-nodes-base.webhook"
+    },
+    "redaction": {
+     "version": 2,
+     "production": false,
+     "manual": false
+    }
+   }
+  },
+  "resumeToken": "redacted"
+ },
+ "customData": {},
+ "workflowData": {
+  "id": "hbuLLmZWicq9fXSt",
+  "name": "demo-ticket-triage",
+  "nodes": [
+   {
+    "parameters": {
+     "multipleMethods": false,
+     "httpMethod": "POST",
+     "path": "demo-ticket-triage",
+     "authentication": "none",
+     "responseMode": "lastNode",
+     "responseData": "firstEntryJson",
+     "options": {}
+    },
+    "id": "78df4cae-39a8-447a-bd98-166bec404420",
+    "name": "Webhook",
+    "type": "n8n-nodes-base.webhook",
+    "typeVersion": 2,
+    "position": [
+     48,
+     272
+    ],
+    "webhookId": "97c5686a-1a19-5b98-a7a7-c88bd9e0a784"
+   },
+   {
+    "parameters": {
+     "mode": "manual",
+     "duplicateItem": false,
+     "assignments": {
+      "assignments": [
+       {
+        "id": "44a1d6ad-030e-5dc4-a133-61c9687769bd",
+        "name": "ticket",
+        "type": "string",
+        "value": "={{ $json.body?.text || \"Hi, since this morning our team can't log in to the dashboard. We get 'session expired' right after entering the password. We have a client demo at 15:00, please help.\" }}"
+       }
+      ]
+     },
+     "includeOtherFields": false,
+     "options": {}
+    },
+    "id": "2ab56757-53ec-4833-b124-9a0decc6b706",
+    "name": "Ticket",
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 3.4,
+    "position": [
+     272,
+     272
+    ]
+   },
+   {
+    "parameters": {
+     "notice": "",
+     "promptType": "define",
+     "text": "={{ $json.ticket }}",
+     "hasOutputParser": false,
+     "needsFallback": false,
+     "messages": {
+      "messageValues": [
+       {
+        "type": "SystemMessagePromptTemplate",
+        "message": "You triage customer support tickets. Answer with JSON only, no prose, no code fences: {\"category\": \"billing|bug|access|feature_request|other\", \"urgency\": \"low|normal|high\", \"summary\": \"<one sentence>\"}"
+       }
+      ]
+     },
+     "batching": {}
+    },
+    "id": "c012079a-cbf5-41ce-a370-e36a2fd556c3",
+    "name": "Classify ticket",
+    "type": "@n8n/n8n-nodes-langchain.chainLlm",
+    "typeVersion": 1.9,
+    "position": [
+     480,
+     272
+    ]
+   },
+   {
+    "parameters": {
+     "notice": "",
+     "model": "openai/gpt-oss-20b",
+     "options": {}
+    },
+    "id": "b79ccd4f-5c1e-437f-96cc-cdf53c28d897",
+    "name": "Groq Chat Model",
+    "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+    "typeVersion": 1,
+    "position": [
+     480,
+     480
+    ],
+    "credentials": {
+     "groqApi": {
+      "id": "redacted",
+      "name": "Groq account"
+     }
+    }
+   },
+   {
+    "parameters": {
+     "mode": "runOnceForAllItems",
+     "language": "javaScript",
+     "jsCode": "// The classifier is asked for JSON, but a model can still wrap it in prose or fences.\nconst raw = String($json.text ?? '');\nconst match = raw.match(/\\{[\\s\\S]*\\}/);\nlet c = {};\ntry { c = match ? JSON.parse(match[0]) : {}; } catch (e) { c = {}; }\nreturn [{ json: {\n  ticket: $('Ticket').first().json.ticket,\n  category: c.category ?? 'other',\n  urgency: c.urgency ?? 'normal',\n  summary: c.summary ?? raw.slice(0, 200),\n} }];\n",
+     "notice": ""
+    },
+    "id": "96820f5a-384f-4914-8eb0-be1d3700ebb2",
+    "name": "Parse classification",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+     800,
+     272
+    ]
+   },
+   {
+    "parameters": {
+     "notice": "",
+     "promptType": "define",
+     "text": "=Ticket ({{ $json.category }}, urgency {{ $json.urgency }}):\n\n{{ $json.ticket }}",
+     "hasOutputParser": false,
+     "needsFallback": false,
+     "messages": {
+      "messageValues": [
+       {
+        "type": "SystemMessagePromptTemplate",
+        "message": "You are a support agent. Write a short, friendly first reply to the customer (at most 5 sentences). Acknowledge the problem, say what happens next, and do not promise anything you can't know. Plain text, no greeting line with a name."
+       }
+      ]
+     },
+     "batching": {}
+    },
+    "id": "650ed647-a8ca-4325-a6f3-c7ceebf73d13",
+    "name": "Draft reply",
+    "type": "@n8n/n8n-nodes-langchain.chainLlm",
+    "typeVersion": 1.9,
+    "position": [
+     1024,
+     272
+    ]
+   },
+   {
+    "parameters": {
+     "notice": "",
+     "model": {
+      "__rl": true,
+      "value": "claude-haiku-5-5",
+      "mode": "list",
+      "cachedResultName": "Claude Haiku 5.5"
+     },
+     "options": {
+      "maxTokensToSample": 400
+     }
+    },
+    "id": "d65bd153-baa3-48bf-abea-fe0e8f9e197f",
+    "name": "Anthropic Chat Model",
+    "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+    "typeVersion": 1.6,
+    "position": [
+     1024,
+     480
+    ],
+    "credentials": {
+     "anthropicApi": {
+      "id": "redacted",
+      "name": "ops-anthropic"
+     }
+    }
+   },
+   {
+    "parameters": {
+     "mode": "manual",
+     "duplicateItem": false,
+     "assignments": {
+      "assignments": [
+       {
+        "id": "6f329883-60fa-5c3f-81f7-059778cbe7eb",
+        "name": "category",
+        "type": "string",
+        "value": "={{ $('Parse classification').first().json.category }}"
+       },
+       {
+        "id": "70cec885-d94a-5a79-9c43-567605ebf9f2",
+        "name": "urgency",
+        "type": "string",
+        "value": "={{ $('Parse classification').first().json.urgency }}"
+       },
+       {
+        "id": "b189d2f3-b04b-5871-b9cd-35b9531ecda6",
+        "name": "summary",
+        "type": "string",
+        "value": "={{ $('Parse classification').first().json.summary }}"
+       },
+       {
+        "id": "fabf365f-b176-5b1f-ba30-2b0cfd3e0ab1",
+        "name": "reply",
+        "type": "string",
+        "value": "={{ $json.text }}"
+       }
+      ]
+     },
+     "includeOtherFields": false,
+     "options": {}
+    },
+    "id": "2dc0b79d-dd18-40c8-b202-4373611a436d",
+    "name": "Result",
+    "type": "n8n-nodes-base.set",
+    "typeVersion": 3.4,
+    "position": [
+     1344,
+     272
+    ]
+   },
+   {
+    "parameters": {
+     "content": "## demo-ticket-triage\nTwo LLM calls per run, two providers: **Groq** classifies, **Claude** drafts the reply. Exists so the Ops Console cost meter has real spend to count.\n\nFire it with `scripts/fire-triage.sh`. Error workflow: ops-error-handler.",
+     "height": 220,
+     "width": 520,
+     "color": 1
+    },
+    "id": "920cbd75-66a3-4a9a-91c4-94a6189c9e71",
+    "name": "Note",
+    "type": "n8n-nodes-base.stickyNote",
+    "typeVersion": 1,
+    "position": [
+     0,
+     0
+    ]
+   }
+  ],
+  "connections": {
+   "Webhook": {
+    "main": [
+     [
+      {
+       "node": "Ticket",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Ticket": {
+    "main": [
+     [
+      {
+       "node": "Classify ticket",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Classify ticket": {
+    "main": [
+     [
+      {
+       "node": "Parse classification",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Parse classification": {
+    "main": [
+     [
+      {
+       "node": "Draft reply",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Draft reply": {
+    "main": [
+     [
+      {
+       "node": "Result",
+       "type": "main",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Groq Chat Model": {
+    "ai_languageModel": [
+     [
+      {
+       "node": "Classify ticket",
+       "type": "ai_languageModel",
+       "index": 0
+      }
+     ]
+    ]
+   },
+   "Anthropic Chat Model": {
+    "ai_languageModel": [
+     [
+      {
+       "node": "Draft reply",
+       "type": "ai_languageModel",
+       "index": 0
+      }
+     ]
+    ]
+   }
+  },
+  "settings": {
+   "executionOrder": "v1",
+   "binaryMode": "separate",
+   "timeSavedMode": "fixed",
+   "errorWorkflow": "sAAIxBao3kjRrhXI",
+   "callerPolicy": "workflowsFromSameOwner",
+   "availableInMCP": false
+  },
+  "nodeGroups": []
+ }
+}

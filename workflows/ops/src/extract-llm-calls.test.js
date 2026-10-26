@@ -6,7 +6,7 @@ const assert = require('assert');
 
 const code = fs.readFileSync(path.join(__dirname, 'extract-llm-calls.js'), 'utf8');
 // Execution 35791 of demo-ticket-triage on n8n 2.42.5 (2026-10-26), IP and credential ids redacted.
-const real = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/execution-demo-triage.json'), 'utf8'));
+const real = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/demo-triage-35791.json'), 'utf8'));
 
 function run(...executions) {
   const $input = { all: () => executions.map((json) => ({ json })) };
