@@ -28,15 +28,17 @@ Plan: [decisions 028–031](decisions.md). Each step is one pull request.
 
 ## 4. Daily budget alert (PR #5)
 
-- [ ] `git pull`. In n8n delete ops-cost-collector, import the new `workflows/ops/ops-cost-collector.json`
-- [ ] Config: `n8n_public_url`, `telegram_chat_id` (same as in ops-error-handler), `daily_budget_usd` = **0.0005** for the test
-- [ ] Credentials: Postgres nodes → `ops-db` (now 5: Scan window, Pick unscanned, Record usage, Check budget, Mark budget alert sent); HTTP nodes → `ops-n8n-api` (3); **Send budget alert** → `ops-telegram`
-- [ ] Error workflow → `ops-error-handler`; Save → Publish
-- [ ] `./scripts/fire-triage.sh 2` → within 1–2 min one 💸 message (today is already over $0.0005)
-- [ ] `./scripts/fire-triage.sh 2` again → no second message; `SELECT * FROM cost_alerts;` → one row with `sent_at`
-- [ ] Set `daily_budget_usd` back to **1**, Save → Publish
+- [x] Deployed through the n8n MCP connector instead of a re-import: 5 nodes added to the existing ops-cost-collector, credentials bound, Config filled, published (versions "Daily LLM budget alert (PR #5)", "Budget back to $1 after the live test")
+- [x] Budget $0.0005, `./scripts/fire-triage.sh 2` → one 💸 at 20:48 (execution 36725: $0.00113 spent, 18 calls in 9 runs; Telegram ok; `sent_at` set)
+- [x] `./scripts/fire-triage.sh 2` again → execution 36736 recorded 4 calls, Check budget returned nothing, no message
+- [x] Budget back to $1
+- [x] Found on the way: ops-cost-collector and ops-retry-scheduler saved every successful run (~4,300 a day). The JSON has `saveDataSuccessExecution: none`, the imported workflows didn't. Set through MCP, verified: no successful runs saved after 20:52
 
-## 5. Dashboard: /costs
+## 5. Dashboard: /costs (PR #6)
+
+- [ ] Merge PR #6; GitHub Actions builds the image, note its `sha-…` tag
+- [ ] Hostinger YAML, service `dashboard`: `image:` → the new tag; under `environment:` add `N8N_PUBLIC_URL=https://n8n-bet6.srv1878746.hstgr.cloud` → Deploy
+- [ ] `ops.srv1878746.hstgr.cloud/costs`: today and 7 days match `SELECT sum(cost_usd) FROM llm_usage_costed WHERE started_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';`
 
 ## 6. Live tests
 

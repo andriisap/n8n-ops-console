@@ -28,7 +28,7 @@ What happens when things break, and how each case was verified. "Live" means tes
 | Model without a known price | Cost NULL ("no price"), never $0; a price added later applies to past runs; budget alert names the unpriced calls | Unit: `test_llm_usage.py`, `test_budget.py` |
 | Cost collector down for hours | Picks up from the newest downloaded execution minus 2 h, oldest first; capped at 1 day back | Unit: `test_cost_collector.py`; live 2026-10-26: a day of backlog cleared in minutes |
 | API key lacks a scope the collector needs | Run fails with 403, ops-error-handler alerts | Live 2026-10-26: `workflow:list` missing → incident #69 |
-| Daily budget exceeded | One 💸 message a day; retried until Telegram confirms | Unit: `test_budget.py` |
+| Daily budget exceeded | One 💸 message a day; retried until Telegram confirms | Unit: `test_budget.py`; live 2026-10-26: one message at $0.00113 of $0.0005, none on the next runs |
 | Dashboard can't reach the database | Page stays up and says so; cause in `docker logs`; `/api/ready` returns 503 with the Postgres error code | Local, 2026-10-13: wrong password → "database unreachable" page, log `28P01 password authentication failed` |
 
 ## Live runs of stage 4 (2026-10-14)
@@ -48,3 +48,5 @@ What happens when things break, and how each case was verified. "Live" means tes
 | 2026-10-13 | Fallback alert printed `DB error: [object Object]`: n8n's error output carries the error as an object | Read fields from the object instead of casting it to a string |
 | 2026-10-13 | Dashboard deployed but answered `404 page not found`, no error in any log. Its healthcheck queried the database; the DB login failed, the container went unhealthy, and traefik drops unhealthy containers without logging at WARN | Healthcheck no longer depends on the database; DB status moved to `/api/ready`, which logs the cause (decision 020) |
 | 2026-10-13 | After that fix the alert showed the SQL text: on a connection failure the Postgres node sets `message` to "Failed query: <whole query>" | Search the whole error for known causes (ENOTFOUND, ECONNREFUSED, auth failed…), skip the query dump; tests cover each shape |
+| 2026-10-26 | Collector a day behind on its first run: ~3,000 saved executions a day, none with LLM calls | Executions of workflows without a model node are marked from the listing (decision 032) |
+| 2026-10-26 | ops-retry-scheduler and ops-cost-collector saved every successful run, though their JSON says not to: the setting didn't survive Import from file | Set `saveDataSuccessExecution: none` on the live workflows through the n8n MCP connector; checked after each import from now on |

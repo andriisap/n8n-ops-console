@@ -76,3 +76,34 @@ UPDATE retry_queue r SET
 FROM ranked k WHERE k.id = r.id;
 """)
 print("seeded", len(PROBLEMS), "incidents")
+
+# LLM usage for the /costs page: 14 days of a ticket-triage workflow (Groq + Claude per
+# run), a summarizer that only uses Claude, a spike on one day, and one unpriced model.
+# Prices come from infra/prices/model_prices.sql, like on the server.
+psql((ROOT / "infra/prices/model_prices.sql").read_text())
+rows = []
+ex = 50000
+for day in range(13, -1, -1):
+    runs = random.randint(8, 30) if day != 4 else 90           # a busy day four days ago
+    for _ in range(runs):
+        ex += 1
+        at = f"(date_trunc('day', now()) - interval '{day} days' + random() * interval '23 hours')"
+        rows.append(f"('{ex}', 'wf-triage', 'demo-ticket-triage', 'Groq Chat Model', 0, 'groq', "
+                    f"'openai/gpt-oss-20b', {random.randint(130, 170)}, {random.randint(60, 150)}, 'success', {at})")
+        rows.append(f"('{ex}', 'wf-triage', 'demo-ticket-triage', 'Anthropic Chat Model', 0, 'anthropic', "
+                    f"'claude-haiku-5-5', {random.randint(115, 140)}, {random.randint(110, 160)}, 'success', {at})")
+    for _ in range(random.randint(1, 4)):
+        ex += 1
+        at = f"(date_trunc('day', now()) - interval '{day} days' + random() * interval '23 hours')"
+        rows.append(f"('{ex}', 'wf-sum', 'weekly-summary', 'Anthropic Chat Model', 0, 'anthropic', "
+                    f"'claude-haiku-5-5', {random.randint(8000, 40000)}, {random.randint(600, 1500)}, 'success', {at})")
+ex += 1
+rows.append(f"('{ex}', 'wf-sum', 'weekly-summary', 'OpenRouter Chat Model', 0, 'openrouter', "
+            f"'some/new-model', 4000, 500, 'error', now() - interval '3 hours')")
+psql("TRUNCATE llm_usage, cost_scans, cost_alerts;\n"
+     "INSERT INTO llm_usage (execution_id, workflow_id, workflow_name, node_name, run_index, provider, model, "
+     "input_tokens, output_tokens, execution_status, started_at) VALUES\n" + ",\n".join(rows) + ";\n"
+     "INSERT INTO cost_scans (execution_id, workflow_id, workflow_name, execution_status, started_at, llm_calls) "
+     "SELECT execution_id, max(workflow_id), max(workflow_name), max(execution_status), min(started_at), count(*) "
+     "FROM llm_usage GROUP BY execution_id;")
+print("seeded", len(rows), "LLM calls")

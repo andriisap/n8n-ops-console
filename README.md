@@ -29,6 +29,7 @@ ops-cost-collector (every minute)
 dashboard (Next.js, ops.<host>)
   → reads incidents, events and retry state as a read-mostly role
   → Resolve / Ignore / Reopen, Replay (queues a job, holds no n8n key), refreshes every 10 s
+  → /costs: spend today / 7 / 30 days, per day, per workflow, per model with its price source, top runs
 ```
 
 ## Dashboard
