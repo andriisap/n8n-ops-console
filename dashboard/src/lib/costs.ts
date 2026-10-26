@@ -158,9 +158,15 @@ export async function topRuns(days = 7, limit = 10): Promise<RunCost[]> {
   return rows;
 }
 
-// Collector health: when it last recorded something, so a stale page says so.
-export async function lastScan(): Promise<Date | null> {
-  const { rows } = await db().query<{ at: Date | null }>(`SELECT max(scanned_at) AS at FROM cost_scans`);
+// Collector health: when it last RAN (heartbeat written at the start of every run), not
+// when it last recorded something: quiet hours record nothing and are fine. Falls back to
+// the newest scan for a collector older than the heartbeat.
+export async function lastCollectorRun(): Promise<Date | null> {
+  const { rows } = await db().query<{ at: Date | null }>(
+    `SELECT coalesce(
+       (SELECT last_beat_at FROM heartbeats WHERE source = 'ops-cost-collector'),
+       (SELECT max(scanned_at) FROM cost_scans)) AS at`,
+  );
   return rows[0]?.at ?? null;
 }
 

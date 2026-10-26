@@ -133,3 +133,7 @@ The first live run showed the cost: about 3,000 saved executions a day on this i
 ## 033. One budget alert per day, marked sent only after delivery (2026-10-26)
 
 After recording new usage, the collector compares today's spend (UTC day, all workflows, priced through `llm_usage_costed`) with `daily_budget_usd`. Over budget claims a `cost_alerts` row for the day; Telegram is sent; only then is `sent_at` set. A failed send leaves the row unsent, so the next run tries again; a delivered one silences the rest of the day, however much more is spent. Calls without a price are counted and named in the message, since they make real spend higher than shown. The check runs only when new usage arrived: spend can't grow without it.
+
+## 034. The collector writes a heartbeat every run (2026-10-26)
+
+The first `/costs` page judged the collector by its newest scan and showed "check ops-cost-collector" after 18 quiet minutes while the collector was fine: once successful scheduler and collector runs stopped being saved, there were simply no new executions to scan. Liveness is now its own signal: `Scan window`, the first query of every run, upserts `heartbeats('ops-cost-collector')`, and the page warns only when that is older than 5 minutes. The same table is what stage 6 builds on for n8n itself.

@@ -36,9 +36,10 @@ Plan: [decisions 028–031](decisions.md). Each step is one pull request.
 
 ## 5. Dashboard: /costs (PR #6)
 
-- [ ] Merge PR #6; GitHub Actions builds the image, note its `sha-…` tag
-- [ ] Hostinger YAML, service `dashboard`: `image:` → the new tag; under `environment:` add `N8N_PUBLIC_URL=https://n8n-bet6.srv1878746.hstgr.cloud` → Deploy
-- [ ] `ops.srv1878746.hstgr.cloud/costs`: today and 7 days match `SELECT sum(cost_usd) FROM llm_usage_costed WHERE started_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';`
+- [x] Merge PR #6 → image `sha-e464a38`; Hostinger YAML: new tag + `N8N_PUBLIC_URL` → Deploy
+- [x] `/costs` live: Today 11 runs, 22 calls, $0.00137 = the same query in psql; execution ids link to n8n
+- [x] False "check ops-cost-collector" warning after 18 quiet minutes → heartbeat (PR #7, decision 034). Scan window updated live through MCP
+- [ ] Merge PR #7 → new image tag in the YAML → Deploy → page says "Collector last ran … ago" without a warning
 
 ## 6. Live tests
 
