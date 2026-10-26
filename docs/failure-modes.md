@@ -26,10 +26,21 @@ What happens when things break, and how each case was verified. "Live" means tes
 | n8n itself is down | Nothing inside n8n can notice | Not covered yet: external heartbeat in stage 6 |
 | Same execution read twice by the cost collector | No-op: unique per (execution, node, run) | Unit: `test_llm_usage.py` |
 | Model without a known price | Cost NULL ("no price"), never $0; a price added later applies to past runs; budget alert names the unpriced calls | Unit: `test_llm_usage.py`, `test_budget.py` |
-| Cost collector down for hours | Picks up from the newest downloaded execution minus 2 h, oldest first; capped at 1 day back | Unit: `test_cost_collector.py`; live 2026-10-26: a day of backlog cleared in minutes |
+| Cost collector down | `/costs` turns amber after 5 min (heartbeat); on return it picks up from the newest downloaded execution minus 2 h, oldest first, capped at 1 day back | Unit: `test_cost_collector.py`; live 2026-10-26: 7-minute outage, amber at 6 min, 3 missed runs recorded within a minute of return |
 | API key lacks a scope the collector needs | Run fails with 403, ops-error-handler alerts | Live 2026-10-26: `workflow:list` missing → incident #69 |
+| LLM request over the provider's limit (Groq free tier: 8,000 tokens/minute) | Classified `validation`, not retried automatically; nothing billed, no cost recorded | Live 2026-10-26: incident #76 |
 | Daily budget exceeded | One 💸 message a day; retried until Telegram confirms | Unit: `test_budget.py`; live 2026-10-26: one message at $0.00113 of $0.0005, none on the next runs |
 | Dashboard can't reach the database | Page stays up and says so; cause in `docker logs`; `/api/ready` returns 503 with the Postgres error code | Local, 2026-10-13: wrong password → "database unreachable" page, log `28P01 password authentication failed` |
+
+## Live runs of stage 5 (2026-10-26)
+
+| Run | What happened |
+| --- | --- |
+| demo-ticket-triage, 14 runs | Every call recorded with real `tokenUsage`, none estimated; costs checked by hand against the price rows (e.g. 36038 Groq: 147 × $0.075 + 116 × $0.30 per million = $0.0000458). `/costs` Today = the same query in psql: 11 runs, 22 calls, $0.001370 |
+| Budget alert, budget set to $0.0005 | One 💸 at $0.00113 (execution 36725), `sent_at` set after Telegram confirmed; the next run with new usage (36736) sent nothing |
+| Ticket of 8,694 tokens (`--too-long`) | Groq refused it: over the free tier's 8,000 tokens a minute. Incident #76 as `validation`, no automatic retry (a request that size never fits), nothing billed, recorded with 0 calls |
+| Ticket of ~7,400 tokens (`--long`), execution 36842 | Recorded at $0.00138: 12.8K tokens in, 507 out, about 10× an ordinary run, top of "Most expensive runs". Claude's reply stopped at the workflow's `maxTokensToSample: 400` |
+| Collector unpublished for 7 minutes | After 5 minutes `/costs` turned amber ("Collector last ran 6 min. ago"); 3 runs in that gap were missing. Republished: within a minute all 3 were recorded, 14 runs and 28 calls, no duplicates |
 
 ## Live runs of stage 4 (2026-10-14)
 

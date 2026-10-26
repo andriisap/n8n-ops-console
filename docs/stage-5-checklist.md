@@ -39,9 +39,16 @@ Plan: [decisions 028–031](decisions.md). Each step is one pull request.
 - [x] Merge PR #6 → image `sha-e464a38`; Hostinger YAML: new tag + `N8N_PUBLIC_URL` → Deploy
 - [x] `/costs` live: Today 11 runs, 22 calls, $0.00137 = the same query in psql; execution ids link to n8n
 - [x] False "check ops-cost-collector" warning after 18 quiet minutes → heartbeat (PR #7, decision 034). Scan window updated live through MCP
-- [ ] Merge PR #7 → new image tag in the YAML → Deploy → page says "Collector last ran … ago" without a warning
+- [x] Merge PR #7 → new image tag in the YAML → Deploy → page says "Collector last ran … ago" without a warning
 
-## 6. Live tests
+## 6. Live tests (PR #8 and this one)
+
+- [x] `--too-long` (8,694 tokens): Groq refuses, incident `validation`, no retry, nothing billed
+- [x] `--long` (~7,400 tokens): $0.00138, ~10× an ordinary run, top of "Most expensive runs"
+- [x] Collector unpublished 7 min through MCP: amber after 5 min, missed runs recorded on return, no duplicates
+- [x] Results in [failure-modes.md](failure-modes.md#live-runs-of-stage-5-2026-10-26)
+
+Closed 2026-10-26.
 
 ## Done when
 
