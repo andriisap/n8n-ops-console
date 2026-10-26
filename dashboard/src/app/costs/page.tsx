@@ -1,5 +1,5 @@
 import DailyCostChart from '@/components/DailyCostChart';
-import { byModel, byWorkflow, daily, executionUrl, lastScan, summary, topRuns, type Totals } from '@/lib/costs';
+import { byModel, byWorkflow, daily, executionUrl, lastCollectorRun, summary, topRuns, type Totals } from '@/lib/costs';
 import { ago, count, exact, perMtok, usd } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -20,11 +20,12 @@ function Stat({ k, t, note }: { k: string; t: Totals; note?: string }) {
 }
 
 export default async function CostsPage() {
-  const [s, days, workflows, models, runs, scanned] = await Promise.all([
-    summary(), daily(14), byWorkflow(7), byModel(7), topRuns(7, 10), lastScan(),
+  const [s, days, workflows, models, runs, ranAt] = await Promise.all([
+    summary(), daily(14), byWorkflow(7), byModel(7), topRuns(7, 10), lastCollectorRun(),
   ]);
   const perRun = s.last7.runs > 0 ? s.last7.cost / s.last7.runs : null;
-  const stale = !scanned || Date.now() - new Date(scanned).getTime() > 10 * 60_000;
+  // The collector runs every minute: five quiet minutes means it isn't running.
+  const stale = !ranAt || Date.now() - new Date(ranAt).getTime() > 5 * 60_000;
 
   return (
     <main>
@@ -33,8 +34,8 @@ export default async function CostsPage() {
           <h2>LLM costs</h2>
           <div className="sub">
             <span>Priced per call with the price valid on that day, UTC days.</span>
-            <span title={exact(scanned)} className={stale ? 'warn' : undefined}>
-              Collector last recorded {ago(scanned)}{stale && ', check ops-cost-collector'}.
+            <span title={exact(ranAt)} className={stale ? 'warn' : undefined}>
+              Collector last ran {ago(ranAt)}{stale && ', check ops-cost-collector'}.
             </span>
           </div>
         </div>

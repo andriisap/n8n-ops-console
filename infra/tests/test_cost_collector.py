@@ -9,7 +9,7 @@ from _db import ROOT, check, psql, run_query_file, scalar
 
 def window():
     sql = (ROOT / "workflows/ops/src/cost-scan-window.sql").read_text()
-    return psql(sql)[0]
+    return psql(sql)[0].split("|")[0]
 
 
 def pick(ids, no_llm=()):
@@ -28,7 +28,17 @@ def no_llm(execution_id, started_at):
             "started_at": started_at}
 
 
-psql("TRUNCATE llm_usage, cost_scans RESTART IDENTITY;")
+psql("TRUNCATE llm_usage, cost_scans RESTART IDENTITY; DELETE FROM heartbeats WHERE source = 'ops-cost-collector';")
+
+window()
+check("every run leaves a heartbeat, even with nothing to scan",
+      scalar("SELECT count(*) FROM heartbeats WHERE source = 'ops-cost-collector' "
+             "AND last_beat_at > now() - interval '1 minute'") == "1")
+psql("UPDATE heartbeats SET last_beat_at = now() - interval '1 hour' WHERE source = 'ops-cost-collector';")
+window()
+check("the next run moves it forward, one row per source",
+      scalar("SELECT count(*) FROM heartbeats WHERE source = 'ops-cost-collector' "
+             "AND last_beat_at > now() - interval '1 minute'") == "1")
 
 w = window()
 lag = scalar(f"SELECT round(extract(epoch FROM now() - '{w}'::timestamptz) / 3600)")
