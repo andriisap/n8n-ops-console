@@ -2,7 +2,7 @@
 
 Reliability layer for self-hosted n8n: one error workflow for every workflow, incidents grouped by fingerprint, retries with backoff, LLM cost per run, and a Next.js dashboard on top.
 
-Status: stages 0–4 of 8 done (up to retries and Replay); next is stage 5, LLM cost per run. Tested on n8n 2.42.5.
+Status: stages 0–5 of 8 done (up to LLM cost per run); next is stage 6, an external heartbeat for n8n itself. Tested on n8n 2.42.5.
 
 ## How a failure flows
 
