@@ -1,14 +1,14 @@
 // ops-watchdog: a Cloudflare Worker that watches the n8n server from outside.
 //
 //   POST /ping/<check>   header X-Ping-Key   something inside n8n reports in
-//   GET  /status         header X-Ping-Key   every check as JSON (for the dashboard)
+//   GET  /status         X-Status-Key (read-only, the dashboard) or X-Ping-Key: every check as JSON
 //   cron every minute                         probe URLs, judge silence, tell Telegram on change
 //
 // Alerts go straight to the Telegram Bot API, never through n8n: this is the path that
 // has to work when n8n doesn't.
 
 import {
-  CHECKS, classifyStatus, emptyRow, evaluatePing, evaluateProbe, messageFor, sameKey,
+  CHECKS, canReadStatus, classifyStatus, emptyRow, evaluatePing, evaluateProbe, messageFor, sameKey,
   type Check, type ProbeCheck, type ProbeResult, type Row,
 } from './logic.ts';
 
@@ -19,6 +19,7 @@ export interface Env {
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
   PING_KEY: string;
+  STATUS_KEY?: string;   // read-only key for /status (the dashboard)
 }
 
 const json = (body: unknown, status = 200) =>
@@ -117,7 +118,8 @@ export default {
     }
 
     if (url.pathname === '/status' && req.method === 'GET') {
-      if (!authorized(req, env)) return json({ error: 'unauthorized' }, 401);
+      const headers = { statusKey: req.headers.get('x-status-key') ?? '', pingKey: req.headers.get('x-ping-key') ?? '' };
+      if (!canReadStatus(headers, env)) return json({ error: 'unauthorized' }, 401);
       const rows = await loadRows(env);
       return json(CHECKS.map((c) => {
         const r = rows.get(c.name)!;

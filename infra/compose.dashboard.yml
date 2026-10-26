@@ -17,6 +17,8 @@ services:
     environment:
       - DATABASE_URL=postgres://ops_dashboard:${OPS_DASHBOARD_DB_PASSWORD}@ops-db:5432/ops
       - N8N_PUBLIC_URL=${N8N_PUBLIC_URL:-}   # optional: execution links on /costs
+      - WATCHDOG_URL=${WATCHDOG_URL:-}       # optional: status strip
+      - WATCHDOG_STATUS_KEY=${WATCHDOG_STATUS_KEY:-}
     labels:
       - traefik.enable=true
       - traefik.http.routers.${COMPOSE_PROJECT_NAME}-dashboard.rule=Host(`ops.${TRAEFIK_HOST}`)

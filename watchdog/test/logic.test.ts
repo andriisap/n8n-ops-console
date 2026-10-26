@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CHECKS, classifyStatus, emptyRow, evaluatePing, evaluateProbe, messageFor, sameKey,
+  CHECKS, canReadStatus, classifyStatus, emptyRow, evaluatePing, evaluateProbe, messageFor, sameKey,
   type PingCheck, type ProbeCheck, type Row,
 } from '../src/logic.ts';
 
@@ -122,4 +122,13 @@ test('ping key comparison', () => {
   assert.equal(sameKey('abc123', 'abc124'), false);
   assert.equal(sameKey('', ''), false, 'an unset key never matches');
   assert.equal(sameKey('abc', 'abc123'), false);
+});
+
+test('status: read-only key reads, cannot be used as a ping key; ping key reads too', () => {
+  const keys = { STATUS_KEY: 'read-only-key', PING_KEY: 'ping-key-123' };
+  assert.equal(canReadStatus({ statusKey: 'read-only-key', pingKey: '' }, keys), true);
+  assert.equal(canReadStatus({ statusKey: '', pingKey: 'ping-key-123' }, keys), true);
+  assert.equal(canReadStatus({ statusKey: 'ping-key-123', pingKey: '' }, keys), false);
+  assert.equal(canReadStatus({ statusKey: '', pingKey: '' }, { PING_KEY: 'x' }), false, 'no STATUS_KEY set: empty header never matches');
+  assert.equal(sameKey('read-only-key', keys.PING_KEY), false, 'the status key is not a ping key');
 });

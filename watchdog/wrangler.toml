@@ -21,3 +21,4 @@ DASHBOARD_URL = "https://ops.srv1878746.hstgr.cloud"
 #   npx wrangler secret put TELEGRAM_BOT_TOKEN
 #   npx wrangler secret put TELEGRAM_CHAT_ID
 #   npx wrangler secret put PING_KEY
+#   npx wrangler secret put STATUS_KEY   (read-only, for the dashboard)
