@@ -181,6 +181,20 @@ details pre {
 .mainnav a[aria-current='page'] { color: var(--text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
 
 .section { margin-bottom: 24px; }
+
+/* System status strip under the header */
+.strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: -12px 0 20px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  font-size: 12px;
+}
+.strip-label { color: var(--muted); font-weight: 600; }
+.strip-item { white-space: nowrap; }
+.st-up { color: var(--resolved); }
+.st-down { color: var(--open); }
+.st-unknown { color: var(--muted); }
+.strip-item .muted, .strip-item.muted { color: var(--muted); }
+.strip-item b { font-weight: 600; }
 .table-wrap { overflow-x: auto; }
 .table-wrap .table { min-width: 560px; }
 .card.pad { padding: 16px 16px 8px; overflow: visible; }

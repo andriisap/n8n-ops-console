@@ -102,6 +102,12 @@ export function duration(ms: number): string {
   return `${h} h ${min % 60} min`;
 }
 
+// /status is read-only: the dashboard gets STATUS_KEY, which can't send pings, so a
+// compromised dashboard can't fake "n8n is alive". PING_KEY may read it too (for curl).
+export function canReadStatus(headers: { statusKey: string; pingKey: string }, keys: { STATUS_KEY?: string; PING_KEY?: string }): boolean {
+  return sameKey(headers.statusKey, keys.STATUS_KEY ?? '') || sameKey(headers.pingKey, keys.PING_KEY ?? '');
+}
+
 // Constant-time comparison for the ping key.
 export function sameKey(a: string, b: string): boolean {
   if (!a || !b || a.length !== b.length) return false;

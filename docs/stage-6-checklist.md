@@ -41,7 +41,15 @@ Read `/status` without the key landing in shell history or a screenshot:
 - [x] Checked: canary run 36981 → handler 36982 pinged `error-handler`, no Telegram; second run 36990 the same with the incident already ignored; chaos-429 (36985 → 36986) still takes the normal path (open incident, deduplicated, retry queued)
 - [x] Repo: `workflows/ops/ops-heartbeat.json`, `workflows/chaos/chaos-canary.json`, `build-error-handler.py` with the canary branch
 
-## 4. Dashboard status strip
+## 4. Dashboard status strip (PR #13)
+
+A line under the header on every page: the watchdog's four checks (● up, ▲ down, ○ unknown, with the time of the last signal) and the cost collector's heartbeat. It reads the watchdog with a read-only `STATUS_KEY`: a compromised dashboard can read status but can't send pings.
+
+- [ ] `git pull`; `cd watchdog`; `openssl rand -hex 24` → password manager as "ops-watchdog STATUS_KEY"
+- [ ] `npx wrangler secret put STATUS_KEY` → paste it; `npm run deploy`
+- [ ] GitHub Actions builds the dashboard image → note `sha-…`
+- [ ] Hostinger YAML, service `dashboard`: new `image:` tag; under `environment:` add `WATCHDOG_URL=https://ops-watchdog.andriisap.workers.dev` and `WATCHDOG_STATUS_KEY=<the key>` → Deploy
+- [ ] The strip shows four green checks and "Cost collector … ago"
 
 ## 5. Live tests
 

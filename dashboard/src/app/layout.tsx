@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import AutoRefresh from '@/components/AutoRefresh';
 import NavLinks from '@/components/NavLinks';
+import SystemStrip from '@/components/SystemStrip';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
             <AutoRefresh seconds={10} />
           </header>
+          <SystemStrip />
           {children}
         </div>
       </body>
