@@ -38,6 +38,8 @@ Every workflow points here (Settings → Error workflow).
 2. Upsert: one incident per fingerprint, one event per execution
 3. Alert only on a new or reopened incident
 4. If the DB write fails, alert anyway (bottom branch)
+5. chaos-canary fails every hour on purpose: recorded quietly, then the watchdog on
+   Cloudflare is pinged. No ping for 70 min = the alert path is broken
 
 Source of the code and SQL: `workflows/ops/src/` in the repo."""
 
@@ -49,6 +51,10 @@ nodes = [
         "assignments": {"assignments": [
             {"id": nid("cfg-chat"), "name": "telegram_chat_id",
              "value": "PASTE_CHAT_ID", "type": "string"},
+            {"id": nid("cfg-canary"), "name": "canary_workflow_id",
+             "value": "PASTE_CHAOS_CANARY_WORKFLOW_ID", "type": "string"},
+            {"id": nid("cfg-watchdog"), "name": "watchdog_url",
+             "value": "https://ops-watchdog.<you>.workers.dev", "type": "string"},
         ]},
         "includeOtherFields": True,
         "options": {},
@@ -60,7 +66,34 @@ nodes = [
         "query": src("upsert-incident.sql"),
         "options": {"queryReplacement": "={{ JSON.stringify($json) }}"},
     }, onError="continueErrorOutput", retryOnFail=True, maxTries=3, waitBetweenTries=1000),
-    node("Should alert?", "n8n-nodes-base.if", 2.2, [900, -100], {
+    # The hourly deliberate failure takes its own branch: no Telegram, ping the watchdog.
+    node("Canary?", "n8n-nodes-base.if", 2.2, [900, 0], {
+        "conditions": {
+            "options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 2},
+            "conditions": [{
+                "id": nid("cond-canary"),
+                "leftValue": "={{ $('Normalize error').first().json.workflow_id }}",
+                "rightValue": "={{ $('Config').first().json.canary_workflow_id }}",
+                "operator": {"type": "string", "operation": "equals"},
+            }],
+            "combinator": "and",
+        },
+        "looseTypeValidation": True,
+        "options": {},
+    }),
+    node("Keep canary quiet", "n8n-nodes-base.postgres", 2.5, [1120, 220], {
+        "operation": "executeQuery",
+        "query": src("keep-canary-quiet.sql"),
+        "options": {"queryReplacement": "={{ $('Upsert incident').first().json.incident_id ?? '' }}"},
+    }, alwaysOutputData=True),
+    node("Ping watchdog (canary)", "n8n-nodes-base.httpRequest", 4.2, [1340, 220], {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.watchdog_url.replace(/\\/+$/, '') }}/ping/error-handler",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {"timeout": 10000},
+    }, retryOnFail=True, maxTries=3, waitBetweenTries=5000, executeOnce=True),
+    node("Should alert?", "n8n-nodes-base.if", 2.2, [1120, -100], {
         "conditions": {
             "options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 2},
             "conditions": [{
@@ -74,23 +107,23 @@ nodes = [
         "looseTypeValidation": True,
         "options": {},
     }),
-    node("Build alert", "n8n-nodes-base.code", 2, [1120, -200],
+    node("Build alert", "n8n-nodes-base.code", 2, [1340, -200],
          {"jsCode": src("build-alert.js")}),
-    node("Send alert", "n8n-nodes-base.telegram", 1.2, [1340, -200], {
+    node("Send alert", "n8n-nodes-base.telegram", 1.2, [1560, -200], {
         "chatId": "={{ $('Config').first().json.telegram_chat_id }}",
         "text": "={{ $json.text }}",
         "additionalFields": {"appendAttribution": False, "parse_mode": "HTML",
                              "disable_web_page_preview": True},
     }, retryOnFail=True, maxTries=3, waitBetweenTries=2000),
-    node("Mark alerted", "n8n-nodes-base.postgres", 2.5, [1560, -200], {
+    node("Mark alerted", "n8n-nodes-base.postgres", 2.5, [1780, -200], {
         "operation": "executeQuery",
         "query": "UPDATE incidents SET last_alerted_at = now() WHERE id = $1::bigint;",
         "options": {"queryReplacement": "={{ $('Upsert incident').first().json.incident_id }}"},
     }),
-    node("No alert needed", "n8n-nodes-base.noOp", 1, [1120, 0], {}),
-    node("Build fallback alert", "n8n-nodes-base.code", 2, [900, 220],
+    node("No alert needed", "n8n-nodes-base.noOp", 1, [1340, 0], {}),
+    node("Build fallback alert", "n8n-nodes-base.code", 2, [900, 440],
          {"jsCode": src("build-fallback-alert.js")}),
-    node("Send fallback alert", "n8n-nodes-base.telegram", 1.2, [1120, 220], {
+    node("Send fallback alert", "n8n-nodes-base.telegram", 1.2, [1120, 440], {
         "chatId": "={{ $('Config').first().json.telegram_chat_id }}",
         "text": "={{ $json.text }}",
         "additionalFields": {"appendAttribution": False, "parse_mode": "HTML",
@@ -109,9 +142,14 @@ connections = {
     "Normalize error": {"main": to("Upsert incident")},
     # output 0 = success, output 1 = error output (onError: continueErrorOutput)
     "Upsert incident": {"main": [
-        [{"node": "Should alert?", "type": "main", "index": 0}],
+        [{"node": "Canary?", "type": "main", "index": 0}],
         [{"node": "Build fallback alert", "type": "main", "index": 0}],
     ]},
+    "Canary?": {"main": [
+        [{"node": "Keep canary quiet", "type": "main", "index": 0}],
+        [{"node": "Should alert?", "type": "main", "index": 0}],
+    ]},
+    "Keep canary quiet": {"main": to("Ping watchdog (canary)")},
     "Should alert?": {"main": [
         [{"node": "Build alert", "type": "main", "index": 0}],
         [{"node": "No alert needed", "type": "main", "index": 0}],

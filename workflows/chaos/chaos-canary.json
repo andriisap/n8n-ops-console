@@ -1,0 +1,72 @@
+{
+  "name": "chaos-canary",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## chaos-canary\nFails every hour on purpose. ops-error-handler records it quietly (incident kept as ignored, no Telegram) and pings the watchdog check `error-handler`.\n\nIf the error handler breaks, the pings stop and after 70 minutes the watchdog alerts from Cloudflare.",
+        "width": 460,
+        "height": 220
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -280
+      ],
+      "id": "241b2e8b-2c36-58bc-b016-b64a3fcd74c1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Every hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "de3117bd-9a62-5c14-836f-ca560aa05562"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deliberate failure. ops-error-handler recognises this workflow, records the event\n// without alerting, and pings the watchdog: proof the whole alert path still works.\nthrow new Error('Canary: deliberate hourly failure');"
+      },
+      "name": "Fail on purpose",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "6fd63ba5-21e6-5e7e-aba7-8b573ca55fcd"
+    }
+  ],
+  "connections": {
+    "Every hour": {
+      "main": [
+        [
+          {
+            "node": "Fail on purpose",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  },
+  "pinData": {}
+}
