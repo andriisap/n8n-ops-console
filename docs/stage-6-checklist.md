@@ -19,19 +19,27 @@ One Telegram message when a check goes down, one when it's back. Nothing in betw
 
 ## 2. Deploy the watchdog (on the Mac)
 
-- [ ] `git pull`, then `cd watchdog && npm ci`
-- [ ] `npx wrangler login` (opens the browser, approve)
-- [ ] `npx wrangler d1 create ops-watchdog` → copy `database_id` into `wrangler.toml`
-- [ ] `npm run db:init` → creates the `checks` table in the remote D1
-- [ ] A ping key: `openssl rand -hex 24` → password manager (n8n needs it in step 3)
-- [ ] Secrets, each asks for the value (input hidden):
-  - `npx wrangler secret put TELEGRAM_BOT_TOKEN` (the token of the alerts bot)
-  - `npx wrangler secret put TELEGRAM_CHAT_ID`
-  - `npx wrangler secret put PING_KEY`
-- [ ] `npm run deploy` → note the `https://ops-watchdog.<you>.workers.dev` URL
-- [ ] `curl -s -H "x-ping-key: <key>" https://ops-watchdog.<you>.workers.dev/status` → 4 checks; after 1–3 minutes `n8n-http` and `dashboard-http` are `up`, the two pings `unknown`
+- [x] `git pull`, then `cd watchdog && npm ci`
+- [x] `npx wrangler login` (opens the browser, approve)
+- [x] `npx wrangler d1 create ops-watchdog` → `database_id` in `wrangler.toml` (PR #11)
+- [x] `npm run db:init` → creates the `checks` table in the remote D1
+- [x] A ping key: `openssl rand -hex 24` → password manager. Rotated once: the first one showed up in a screenshot
+- [x] Secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `PING_KEY` with `npx wrangler secret put …`
+- [x] `npm run deploy` → `https://ops-watchdog.andriisap.workers.dev` (first deploy also registers the account's workers.dev subdomain)
+- [x] `/status` → `n8n-http`, `dashboard-http` up; the two pings `unknown`
+- [ ] After PR #12: `npm run deploy` once more (`workers_dev = true`, `preview_urls = false` now explicit)
 
-## 3. Wire n8n to it (through MCP)
+Read `/status` without the key landing in shell history or a screenshot:
+`read -s KEY` then `curl -s -H "x-ping-key: $KEY" https://ops-watchdog.andriisap.workers.dev/status`
+
+## 3. Wire n8n to it (through MCP, PR #12)
+
+- [x] Credential `ops-watchdog` (Header Auth `X-Ping-Key`), created by hand: it holds the secret
+- [x] `ops-heartbeat` created: every 5 min → `POST /ping/n8n-heartbeat` and `heartbeats('n8n')` in ops-db; error workflow ops-error-handler, successful runs not saved. Test run: watchdog answered `ok`
+- [x] `chaos-canary` created: fails every hour on purpose
+- [x] `ops-error-handler`: `Canary?` after `Upsert incident` → `Keep canary quiet` (incident 77 set to ignored) → `Ping watchdog (canary)`; everything else goes to `Should alert?` as before. Config gained `canary_workflow_id` and `watchdog_url`
+- [x] Checked: canary run 36981 → handler 36982 pinged `error-handler`, no Telegram; second run 36990 the same with the incident already ignored; chaos-429 (36985 → 36986) still takes the normal path (open incident, deduplicated, retry queued)
+- [x] Repo: `workflows/ops/ops-heartbeat.json`, `workflows/chaos/chaos-canary.json`, `build-error-handler.py` with the canary branch
 
 ## 4. Dashboard status strip
 

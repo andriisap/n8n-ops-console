@@ -2,6 +2,8 @@
 name = "ops-watchdog"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
+workers_dev = true            # https://ops-watchdog.<subdomain>.workers.dev
+preview_urls = false          # no per-version preview URLs: one public address
 
 [triggers]
 crons = ["* * * * *"]          # every minute

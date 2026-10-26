@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## ops-error-handler\nEvery workflow points here (Settings → Error workflow).\n\n1. Normalize: flatten the payload, classify the error\n2. Upsert: one incident per fingerprint, one event per execution\n3. Alert only on a new or reopened incident\n4. If the DB write fails, alert anyway (bottom branch)\n\nSource of the code and SQL: `workflows/ops/src/` in the repo.",
+        "content": "## ops-error-handler\nEvery workflow points here (Settings → Error workflow).\n\n1. Normalize: flatten the payload, classify the error\n2. Upsert: one incident per fingerprint, one event per execution\n3. Alert only on a new or reopened incident\n4. If the DB write fails, alert anyway (bottom branch)\n5. chaos-canary fails every hour on purpose: recorded quietly, then the watchdog on\n   Cloudflare is pinged. No ping for 70 min = the alert path is broken\n\nSource of the code and SQL: `workflows/ops/src/` in the repo.",
         "height": 300,
         "width": 460
       },
@@ -35,6 +35,18 @@
               "id": "bb035161-efaf-57d2-8cb8-8758b6cc4bd8",
               "name": "telegram_chat_id",
               "value": "PASTE_CHAT_ID",
+              "type": "string"
+            },
+            {
+              "id": "bb00e586-526e-5e80-b951-46c5bbf355d7",
+              "name": "canary_workflow_id",
+              "value": "PASTE_CHAOS_CANARY_WORKFLOW_ID",
+              "type": "string"
+            },
+            {
+              "id": "e1cf850e-0ca6-5d8a-9e08-a4499c955e3d",
+              "name": "watchdog_url",
+              "value": "https://ops-watchdog.<you>.workers.dev",
               "type": "string"
             }
           ]
@@ -96,6 +108,81 @@
           },
           "conditions": [
             {
+              "id": "9812f8b0-4685-584b-b08b-d6c7688e4afe",
+              "leftValue": "={{ $('Normalize error').first().json.workflow_id }}",
+              "rightValue": "={{ $('Config').first().json.canary_workflow_id }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "name": "Canary?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        0
+      ],
+      "id": "5d3715ba-089b-5baa-af00-36972d4e97a9"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Postgres node \"Keep canary quiet\" in ops-error-handler, on the chaos-canary branch.\n-- $1 = incident id from \"Upsert incident\" ('' when the event was a duplicate).\n-- The canary's incident is ignored on purpose: it counts every run, never alerts and never\n-- shows as open. Returns no rows after the first time; the node always outputs so the\n-- watchdog ping after it still runs.\nUPDATE incidents SET status = 'ignored'\nWHERE id = NULLIF($1, '')::bigint AND status <> 'ignored'\nRETURNING id;\n",
+        "options": {
+          "queryReplacement": "={{ $('Upsert incident').first().json.incident_id ?? '' }}"
+        }
+      },
+      "name": "Keep canary quiet",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1120,
+        220
+      ],
+      "id": "852aa790-6555-543c-a447-763727fe27a1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.watchdog_url.replace(/\\/+$/, '') }}/ping/error-handler",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Ping watchdog (canary)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        220
+      ],
+      "id": "d213e556-0138-529d-86c5-33d775c92155",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
               "id": "643ff4c8-f5cd-5d69-9efb-4293bc7bbfd4",
               "leftValue": "={{ $json.should_alert }}",
               "rightValue": "",
@@ -115,7 +202,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        900,
+        1120,
         -100
       ],
       "id": "c29c7a3e-2133-59c5-a02f-ca5f99f2e019"
@@ -128,7 +215,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
+        1340,
         -200
       ],
       "id": "333c1e3d-da18-59b3-8983-0c9ca18c9d9c"
@@ -147,7 +234,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1340,
+        1560,
         -200
       ],
       "id": "e9943c4e-3f15-56a3-80b7-997abcfd36fb",
@@ -167,7 +254,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1560,
+        1780,
         -200
       ],
       "id": "ebeb7213-d441-5daf-8a88-518a54c6eefe"
@@ -178,7 +265,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        1120,
+        1340,
         0
       ],
       "id": "18cc198e-a377-5609-be41-049f5889e76c"
@@ -192,7 +279,7 @@
       "typeVersion": 2,
       "position": [
         900,
-        220
+        440
       ],
       "id": "8b24ab3e-dc3c-5ef9-b47f-c3ae2db2c29b"
     },
@@ -211,7 +298,7 @@
       "typeVersion": 1.2,
       "position": [
         1120,
-        220
+        440
       ],
       "id": "1dad6006-ccff-59b3-9e40-8a3d0a40f90d",
       "retryOnFail": true,
@@ -257,7 +344,7 @@
       "main": [
         [
           {
-            "node": "Should alert?",
+            "node": "Canary?",
             "type": "main",
             "index": 0
           }
@@ -265,6 +352,35 @@
         [
           {
             "node": "Build fallback alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Canary?": {
+      "main": [
+        [
+          {
+            "node": "Keep canary quiet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Should alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep canary quiet": {
+      "main": [
+        [
+          {
+            "node": "Ping watchdog (canary)",
             "type": "main",
             "index": 0
           }

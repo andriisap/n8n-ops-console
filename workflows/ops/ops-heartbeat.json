@@ -1,0 +1,102 @@
+{
+  "name": "ops-heartbeat",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ops-heartbeat\nEvery 5 minutes: tells the watchdog on Cloudflare that n8n and its schedules are alive, and records the beat in ops-db for the dashboard.\n\nIf these pings stop for 15 minutes, the watchdog alerts Telegram directly, without n8n.",
+        "width": 460,
+        "height": 220
+      },
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -280
+      ],
+      "id": "dfde7895-4bd2-534d-a56d-7d3ac5638c20"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "e1df30b9-24ff-5418-bbac-5ca46f7c980c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ops-watchdog.<you>.workers.dev/ping/n8n-heartbeat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Ping watchdog",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        -100
+      ],
+      "id": "db097218-9f55-5097-922d-3818fbed991b",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO heartbeats (source, last_beat_at) VALUES ('n8n', now())\nON CONFLICT (source) DO UPDATE SET last_beat_at = EXCLUDED.last_beat_at\nRETURNING source, last_beat_at;",
+        "options": {}
+      },
+      "name": "Record heartbeat",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        100
+      ],
+      "id": "461bf59e-2fb6-519e-8f4d-11b1061750a9"
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Ping watchdog",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Record heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true
+  },
+  "pinData": {}
+}
