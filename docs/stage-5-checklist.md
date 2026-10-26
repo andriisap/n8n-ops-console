@@ -17,21 +17,24 @@ Plan: [decisions 028–031](decisions.md). Each step is one pull request.
 - [x] Check: 2 rows for claude-haiku-5-5
 - [x] Groq price for `openai/gpt-oss-20b` from its page in the Groq console → added to `model_prices.sql` (PR #3)
 
-## 3. ops-cost-collector workflow (PR #3)
+## 3. ops-cost-collector workflow (PR #3, #4)
 
-- [ ] `git pull`; load prices again: `pbcopy < infra/prices/model_prices.sql` → paste into psql → `INSERT 0 3` (2 updated, Groq added)
-- [ ] Import `workflows/ops/ops-cost-collector.json`
-- [ ] Node **Config**: `n8n_public_url` = `https://n8n-bet6.srv1878746.hstgr.cloud`
-- [ ] Credentials: **Scan window**, **Pick unscanned**, **Record usage** → `ops-db`; **List executions**, **Get execution** → Header Auth `ops-n8n-api`
-- [ ] ⋯ → Settings → Error workflow → `ops-error-handler`; Save → **Publish**
-- [ ] Within 1–2 min: `SELECT count(*), sum(llm_calls) FROM cost_scans;` grows; `SELECT node_name, model, input_tokens, output_tokens, cost_usd FROM llm_usage_costed;` shows execution 35791 (2 rows, both priced)
-- [ ] `./scripts/fire-triage.sh 3` → 6 new rows within a minute or two
+- [x] Prices reloaded: 3 rows (Claude ×2, Groq)
+- [x] Import `workflows/ops/ops-cost-collector.json`, Config, credentials, error workflow, Publish
+- [x] First run: 225 executions in ~9 min, none with LLM calls, still a day behind. Fixed in PR #4 (decision 032)
+- [x] API key needed the `workflow:list` scope: 403 Forbidden until added (key scopes are enforced)
+- [x] Caught up within minutes: executions 32573–36032 scanned, 35791 with 2 calls
+- [x] `./scripts/fire-triage.sh 3` → 2 rows per run, every cost checked by hand (e.g. 36038 Groq: 147 × $0.075 + 116 × $0.30 = $0.0000458 per million)
 
-First live run: 225 executions scanned in ~9 min, all without LLM calls, still a day behind. Fixed in PR #4 (decision 032): executions of workflows without a model node are marked from the listing, not downloaded.
+## 4. Daily budget alert (PR #5)
 
-- [ ] PR #4: delete the old ops-cost-collector in n8n, import the new one, same Config and credentials plus **List workflows** → `ops-n8n-api`
-
-## 4. Daily budget alert
+- [ ] `git pull`. In n8n delete ops-cost-collector, import the new `workflows/ops/ops-cost-collector.json`
+- [ ] Config: `n8n_public_url`, `telegram_chat_id` (same as in ops-error-handler), `daily_budget_usd` = **0.0005** for the test
+- [ ] Credentials: Postgres nodes → `ops-db` (now 5: Scan window, Pick unscanned, Record usage, Check budget, Mark budget alert sent); HTTP nodes → `ops-n8n-api` (3); **Send budget alert** → `ops-telegram`
+- [ ] Error workflow → `ops-error-handler`; Save → Publish
+- [ ] `./scripts/fire-triage.sh 2` → within 1–2 min one 💸 message (today is already over $0.0005)
+- [ ] `./scripts/fire-triage.sh 2` again → no second message; `SELECT * FROM cost_alerts;` → one row with `sent_at`
+- [ ] Set `daily_budget_usd` back to **1**, Save → Publish
 
 ## 5. Dashboard: /costs
 
