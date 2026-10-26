@@ -9,7 +9,7 @@ crons = ["* * * * *"]          # every minute
 [[d1_databases]]
 binding = "DB"
 database_name = "ops-watchdog"
-database_id = "PASTE_DATABASE_ID"  # from: npx wrangler d1 create ops-watchdog
+database_id = "92072375-ff43-4307-b8b2-e49987a72991"  # npx wrangler d1 create ops-watchdog, 2026-10-26
 
 [vars]
 N8N_URL = "https://n8n-bet6.srv1878746.hstgr.cloud"
