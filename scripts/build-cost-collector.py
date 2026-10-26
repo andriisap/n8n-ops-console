@@ -28,11 +28,22 @@ def node(name, type_, version, pos, params, **extra):
     return n
 
 
-API = "={{ $('Config').first().json.n8n_public_url.replace(/\\/+$/, '') }}/api/v1/executions"
+BASE = "={{ $('Config').first().json.n8n_public_url.replace(/\\/+$/, '') }}/api/v1"
+API = BASE + "/executions"
+PAGINATION = {"pagination": {
+    "paginationMode": "updateAParameterInEachRequest",
+    "parameters": {"parameters": [
+        {"type": "qs", "name": "cursor", "value": "={{ $response.body.nextCursor }}"},
+    ]},
+    "paginationCompleteWhen": "other",
+    "completeExpression": "={{ !$response.body.nextCursor }}",
+    "limitPagesFetched": True,
+    "maxRequests": 20,
+}}
 HEADER_AUTH = {"authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth"}
 
 NOTE = """## ops-cost-collector
-Every minute: list finished executions through n8n's own API, download the ones not seen yet (25 per run, oldest first), and record every LLM call with its tokens.
+Every minute: list finished executions through n8n's own API. Executions of workflows with a model node are downloaded (25 per run, oldest first) and every LLM call recorded with its tokens; the rest are marked scanned straight from the listing.
 
 - No workflow needs changing: model nodes already record `tokenUsage`
 - Only model sub-nodes are counted; the chain node above repeats the same totals
@@ -53,37 +64,36 @@ nodes = [
     node("Scan window", "n8n-nodes-base.postgres", 2.5, [440, 0], {
         "operation": "executeQuery", "query": src("cost-scan-window.sql"), "options": {},
     }),
-    # Without data: a cheap listing of ids and statuses. Pagination follows nextCursor.
-    node("List executions", "n8n-nodes-base.httpRequest", 4.2, [660, 0], {
+    # Which workflows contain a model node: only their executions get downloaded.
+    node("List workflows", "n8n-nodes-base.httpRequest", 4.2, [660, 0], {
+        "url": BASE + "/workflows",
+        **HEADER_AUTH,
+        "sendQuery": True,
+        "queryParameters": {"parameters": [
+            {"name": "limit", "value": "250"},
+            {"name": "excludePinnedData", "value": "true"},
+        ]},
+        "options": {"pagination": PAGINATION, "timeout": 60000},
+    }),
+    # Without data: a cheap listing of ids and statuses. Once, whatever the workflow pages.
+    node("List executions", "n8n-nodes-base.httpRequest", 4.2, [880, 0], {
         "url": API,
         **HEADER_AUTH,
         "sendQuery": True,
         "queryParameters": {"parameters": [
-            {"name": "startedAfter", "value": "={{ $json.started_after }}"},
+            {"name": "startedAfter", "value": "={{ $('Scan window').first().json.started_after }}"},
             {"name": "limit", "value": "250"},
         ]},
-        "options": {
-            "pagination": {"pagination": {
-                "paginationMode": "updateAParameterInEachRequest",
-                "parameters": {"parameters": [
-                    {"type": "qs", "name": "cursor", "value": "={{ $response.body.nextCursor }}"},
-                ]},
-                "paginationCompleteWhen": "other",
-                "completeExpression": "={{ !$response.body.nextCursor }}",
-                "limitPagesFetched": True,
-                "maxRequests": 20,
-            }},
-            "timeout": 60000,
-        },
-    }),
-    node("Finished ids", "n8n-nodes-base.code", 2, [880, 0], {"jsCode": src("finished-ids.js")}),
-    node("Pick unscanned", "n8n-nodes-base.postgres", 2.5, [1100, 0], {
+        "options": {"pagination": PAGINATION, "timeout": 60000},
+    }, executeOnce=True),
+    node("Finished ids", "n8n-nodes-base.code", 2, [1100, 0], {"jsCode": src("finished-ids.js")}),
+    node("Pick unscanned", "n8n-nodes-base.postgres", 2.5, [1320, 0], {
         "operation": "executeQuery",
         "query": src("pick-unscanned.sql"),
         "options": {"queryReplacement": "={{ JSON.stringify($json) }}"},
     }),
     # A query with no rows can still hand on an empty item; only real ids go on.
-    node("Has id?", "n8n-nodes-base.if", 2.2, [1320, 0], {
+    node("Has id?", "n8n-nodes-base.if", 2.2, [1540, 0], {
         "conditions": {
             "options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 2},
             "conditions": [{"id": nid("has-id"), "leftValue": "={{ $json.id }}", "rightValue": "",
@@ -95,7 +105,7 @@ nodes = [
     }),
     # Full data, ignoring EXECUTIONS_DATA_MAX_DISPLAY_SIZE so a long run isn't returned empty.
     # One failed download (e.g. pruned meanwhile) doesn't stop the others; it is retried next run.
-    node("Get execution", "n8n-nodes-base.httpRequest", 4.2, [1540, -100], {
+    node("Get execution", "n8n-nodes-base.httpRequest", 4.2, [1760, -100], {
         "url": "=" + API[1:] + "/{{ $json.id }}",
         **HEADER_AUTH,
         "sendQuery": True,
@@ -105,8 +115,8 @@ nodes = [
         ]},
         "options": {"timeout": 60000},
     }, onError="continueRegularOutput"),
-    node("Extract LLM calls", "n8n-nodes-base.code", 2, [1760, -100], {"jsCode": src("extract-llm-calls.js")}),
-    node("Record usage", "n8n-nodes-base.postgres", 2.5, [1980, -100], {
+    node("Extract LLM calls", "n8n-nodes-base.code", 2, [1980, -100], {"jsCode": src("extract-llm-calls.js")}),
+    node("Record usage", "n8n-nodes-base.postgres", 2.5, [2200, -100], {
         "operation": "executeQuery",
         "query": src("record-llm-usage.sql"),
         "options": {"queryReplacement": "={{ JSON.stringify($json) }}"},
@@ -121,7 +131,8 @@ def to(*targets):
 connections = {
     "Every minute": {"main": to("Config")},
     "Config": {"main": to("Scan window")},
-    "Scan window": {"main": to("List executions")},
+    "Scan window": {"main": to("List workflows")},
+    "List workflows": {"main": to("List executions")},
     "List executions": {"main": to("Finished ids")},
     "Finished ids": {"main": to("Pick unscanned")},
     "Pick unscanned": {"main": to("Has id?")},

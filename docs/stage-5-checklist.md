@@ -27,6 +27,10 @@ Plan: [decisions 028–031](decisions.md). Each step is one pull request.
 - [ ] Within 1–2 min: `SELECT count(*), sum(llm_calls) FROM cost_scans;` grows; `SELECT node_name, model, input_tokens, output_tokens, cost_usd FROM llm_usage_costed;` shows execution 35791 (2 rows, both priced)
 - [ ] `./scripts/fire-triage.sh 3` → 6 new rows within a minute or two
 
+First live run: 225 executions scanned in ~9 min, all without LLM calls, still a day behind. Fixed in PR #4 (decision 032): executions of workflows without a model node are marked from the listing, not downloaded.
+
+- [ ] PR #4: delete the old ops-cost-collector in n8n, import the new one, same Config and credentials plus **List workflows** → `ops-n8n-api`
+
 ## 4. Daily budget alert
 
 ## 5. Dashboard: /costs
