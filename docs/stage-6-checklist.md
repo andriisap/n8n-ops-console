@@ -53,6 +53,11 @@ A line under the header on every page: the watchdog's four checks (● up, ▲ d
 
 ## 5. Live tests
 
+- [x] Strip live: four green checks, "Cost collector … ago" (PR #13 deployed)
+- [x] `docker stop` n8n: 🚨 n8n web after 3 min, 🚨 n8n schedules after 11 min; `docker start`: ✅ both within 3 min. Details in [failure-modes.md](failure-modes.md#live-runs-of-stage-6-2026-10-26)
+- [x] Message fixed: "no signal for 15 min (limit 15)" read as not over the limit → "no signal for over 15 min (last at HH:MM UTC)" (PR #14, needs `npm run deploy`)
+- [ ] Broken alert pipeline: make the canary's ping fail, expect 🚨 "Alert pipeline" within ~70 min, restore, expect ✅
+
 ## Done when
 
 `docker stop` on n8n brings a 🚨 from the watchdog within ~15 minutes and a ✅ after start; a broken alert pipeline is noticed within ~70 minutes.

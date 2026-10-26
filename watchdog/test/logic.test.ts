@@ -44,10 +44,10 @@ test('heartbeat silent past 15 min: one alert, then quiet while still down', () 
   assert.equal(t.row.state, 'up', 'exactly 15 min is still fine');
   t = tick(heartbeat, t.row, T0 + 16 * MIN);
   assert.equal(t.row.state, 'down');
-  assert.match(t.msg!.text, /^🚨 <b>n8n schedules \(ops-heartbeat\)<\/b> is down\nno signal for 16 min \(limit 15\)/);
+  assert.match(t.msg!.text, /^🚨 <b>n8n schedules \(ops-heartbeat\)<\/b> is down\nno signal for over 15 min \(last at 21:00 UTC\)/);
   t = tick(heartbeat, t.row, T0 + 17 * MIN);
   assert.equal(t.msg, null, 'no repeat');
-  assert.equal(t.row.detail, 'no signal for 17 min (limit 15)');
+  assert.equal(t.row.detail, 'no signal for over 15 min (last at 21:00 UTC)');
 });
 
 test('signal returns: one recovery with how long it was down', () => {
