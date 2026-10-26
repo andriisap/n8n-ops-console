@@ -55,7 +55,7 @@ export function evaluatePing(check: PingCheck, row: Row, now: number): Row {
   if (row.last_ping_at === null) return withState(row, 'unknown', now, 'no signal yet');
   const silentMin = (now - row.last_ping_at) / 60_000;
   return silentMin > check.maxSilenceMin
-    ? withState(row, 'down', now, `no signal for ${Math.floor(silentMin)} min (limit ${check.maxSilenceMin})`)
+    ? withState(row, 'down', now, `no signal for over ${check.maxSilenceMin} min (last at ${hhmm(row.last_ping_at)} UTC)`)
     : withState(row, 'up', now, null);
 }
 
@@ -93,6 +93,10 @@ export function messageFor(check: Check, row: Row, now: number): Message | null 
     name: row.name, to: 'up',
     text: `✅ <b>${esc(check.label)}</b> is back${row.detail ? ` (${esc(row.detail)})` : ''}`,
   };
+}
+
+function hhmm(ms: number): string {
+  return new Date(ms).toISOString().slice(11, 16);
 }
 
 export function duration(ms: number): string {

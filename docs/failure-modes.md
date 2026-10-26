@@ -23,7 +23,9 @@ What happens when things break, and how each case was verified. "Live" means tes
 | n8n API key wrong or revoked | Jobs keep their attempts and wait; the run fails, so ops-error-handler alerts | Unit: `retry-scheduler.test.js` |
 | Execution pruned before its retry | Job marked dead with the reason | Unit |
 | Server says `Retry-After: 120` | Not honoured: the Error Trigger payload carries no response headers | Known limitation (decision 024) |
-| n8n itself is down | Nothing inside n8n can notice | Not covered yet: external heartbeat in stage 6 |
+| n8n itself is down | The watchdog on Cloudflare: 🚨 "n8n web" after 3 failed probes, 🚨 "n8n schedules" after 15 min without a heartbeat, ✅ for each when back | Live 2026-10-26, see stage 6 runs |
+| n8n up but its schedules stopped | `ops-heartbeat` stops pinging: 🚨 "n8n schedules" after 15 min | Unit: watchdog tests; the same path as the live stop |
+| ops-error-handler itself broken | Its own failures never reach an error workflow; the hourly `chaos-canary` stops pinging, 🚨 "Alert pipeline" after 70 min | Unit: watchdog tests; live run pending |
 | Same execution read twice by the cost collector | No-op: unique per (execution, node, run) | Unit: `test_llm_usage.py` |
 | Model without a known price | Cost NULL ("no price"), never $0; a price added later applies to past runs; budget alert names the unpriced calls | Unit: `test_llm_usage.py`, `test_budget.py` |
 | Cost collector down | `/costs` turns amber after 5 min (heartbeat); on return it picks up from the newest downloaded execution minus 2 h, oldest first, capped at 1 day back | Unit: `test_cost_collector.py`; live 2026-10-26: 7-minute outage, amber at 6 min, 3 missed runs recorded within a minute of return |
@@ -31,6 +33,14 @@ What happens when things break, and how each case was verified. "Live" means tes
 | LLM request over the provider's limit (Groq free tier: 8,000 tokens/minute) | Classified `validation`, not retried automatically; nothing billed, no cost recorded | Live 2026-10-26: incident #76 |
 | Daily budget exceeded | One 💸 message a day; retried until Telegram confirms | Unit: `test_budget.py`; live 2026-10-26: one message at $0.00113 of $0.0005, none on the next runs |
 | Dashboard can't reach the database | Page stays up and says so; cause in `docker logs`; `/api/ready` returns 503 with the Postgres error code | Local, 2026-10-13: wrong password → "database unreachable" page, log `28P01 password authentication failed` |
+
+## Live runs of stage 6 (2026-10-26)
+
+| Run | What happened |
+| --- | --- |
+| `docker stop n8n-bet6-n8n-1` at 21:35:20 UTC | 21:38 🚨 n8n web down (HTTP 404: traefik with no container behind it), the dashboard strip showed ▲ n8n web down. 21:46 🚨 n8n schedules down (last heartbeat ~21:31 + 15 min). Nothing else sent |
+| `docker start` at ~21:48 | 21:49 ✅ n8n web back (down for 11 min, counted from the alert), 21:51 ✅ n8n schedules back with the first `ops-heartbeat`. One message per change, none repeated |
+| `chaos-canary` through MCP | Handler recorded it quietly (incident 77 ignored), pinged `error-handler`; no Telegram. chaos-429 still took the normal path |
 
 ## Live runs of stage 5 (2026-10-26)
 
