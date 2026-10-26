@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## ops-cost-collector\nEvery minute: list finished executions through n8n's own API, download the ones not seen yet (25 per run, oldest first), and record every LLM call with its tokens.\n\n- No workflow needs changing: model nodes already record `tokenUsage`\n- Only model sub-nodes are counted; the chain node above repeats the same totals\n- Cost isn't stored: the `llm_usage_costed` view prices each call by its day and tier\n\nSuccessful runs are not saved. Failed runs are, and alert through ops-error-handler.",
+        "content": "## ops-cost-collector\nEvery minute: list finished executions through n8n's own API. Executions of workflows with a model node are downloaded (25 per run, oldest first) and every LLM call recorded with its tokens; the rest are marked scanned straight from the listing.\n\n- No workflow needs changing: model nodes already record `tokenUsage`\n- Only model sub-nodes are counted; the chain node above repeats the same totals\n- Cost isn't stored: the `llm_usage_costed` view prices each call by its day and tier\n\nSuccessful runs are not saved. Failed runs are, and alert through ops-error-handler.",
         "height": 300,
         "width": 520
       },
@@ -62,7 +62,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- Postgres node \"Scan window\" in ops-cost-collector.\n-- Where to start listing executions: two hours before the newest execution already scanned,\n-- so a run that started earlier but finished after the last scan is still caught.\n-- Unscanned executions are taken oldest first (pick-unscanned.sql), so after downtime the\n-- frontier walks forward through the backlog instead of skipping it. First run: last 24 h.\nSELECT to_char(\n         (coalesce((SELECT max(started_at) FROM cost_scans), now() - interval '1 day')\n          - interval '2 hours') AT TIME ZONE 'UTC',\n         'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS started_after;\n",
+        "query": "-- Postgres node \"Scan window\" in ops-cost-collector.\n-- Where to start listing executions.\n--\n-- Frontier = the newest execution whose data was downloaded (workflow_name is set only on\n-- that path; executions of workflows without a model node are marked from the listing and\n-- don't move it). Downloads go oldest first, so every LLM execution still waiting is newer\n-- than the frontier. Minus 2 h: a run that started earlier but finished after the last scan\n-- is still caught.\n-- Never more than 1 day back, so the listing stays a few pages: after more than a day of\n-- collector downtime, older LLM runs are not counted (decision 032).\nSELECT to_char(\n         (greatest(\n             coalesce((SELECT max(started_at) FROM cost_scans WHERE workflow_name IS NOT NULL), '-infinity'),\n             now() - interval '1 day')\n          - interval '2 hours') AT TIME ZONE 'UTC',\n         'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS started_after;\n",
         "options": {}
       },
       "name": "Scan window",
@@ -76,6 +76,55 @@
     },
     {
       "parameters": {
+        "url": "={{ $('Config').first().json.n8n_public_url.replace(/\\/+$/, '') }}/api/v1/workflows",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "250"
+            },
+            {
+              "name": "excludePinnedData",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "updateAParameterInEachRequest",
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "qs",
+                    "name": "cursor",
+                    "value": "={{ $response.body.nextCursor }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.nextCursor }}",
+              "limitPagesFetched": true,
+              "maxRequests": 20
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "name": "List workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "b81af3ba-ef6a-5935-af4e-f3cecc34a12e"
+    },
+    {
+      "parameters": {
         "url": "={{ $('Config').first().json.n8n_public_url.replace(/\\/+$/, '') }}/api/v1/executions",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
@@ -84,7 +133,7 @@
           "parameters": [
             {
               "name": "startedAfter",
-              "value": "={{ $json.started_after }}"
+              "value": "={{ $('Scan window').first().json.started_after }}"
             },
             {
               "name": "limit",
@@ -118,20 +167,21 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
+        880,
         0
       ],
-      "id": "bfbdb453-42a2-571f-a6c1-0e60bef9e080"
+      "id": "bfbdb453-42a2-571f-a6c1-0e60bef9e080",
+      "executeOnce": true
     },
     {
       "parameters": {
-        "jsCode": "// Code node \"Finished ids\" in ops-cost-collector (mode: run once for all items).\n// Input: one item per page of GET /api/v1/executions (pagination on), each {data, nextCursor}.\n// Output: ONE item {ids, listed} with the ids of finished executions.\n// Running ones are already left out by the API; waiting ones are left out here and\n// picked up by a later run once they finish.\nconst FINISHED = new Set(['success', 'error', 'crashed', 'canceled']);\nconst ids = new Set();\nlet listed = 0;\nfor (const page of $input.all()) {\n  for (const e of page.json?.data ?? []) {\n    listed++;\n    if (e?.id != null && FINISHED.has(e.status)) ids.add(String(e.id));\n  }\n}\nreturn [{ json: { ids: [...ids], listed } }];\n"
+        "jsCode": "// Code node \"Finished ids\" in ops-cost-collector (mode: run once for all items).\n// Input: pages of GET /api/v1/executions (pagination on), each {data, nextCursor}.\n// Also reads the pages of \"List workflows\" to know which workflows contain a model node.\n//\n// Output: ONE item {ids, no_llm, listed}\n//   ids     finished executions of workflows WITH a model node: their data gets downloaded\n//   no_llm  finished executions of workflows without one: marked scanned with 0 calls\n//           straight from the listing, no download. On a live instance that is most of them\n//           (error handler, chaos, schedulers), so the backlog clears 10x faster.\n// A workflow is judged by its current version: an LLM node removed later means its old\n// runs aren't counted (decision 032).\n// Running executions are already left out by the API; waiting ones are left for later.\nconst FINISHED = new Set(['success', 'error', 'crashed', 'canceled']);\nconst MODEL_NODE = /\\.lm[A-Z]|lmChat/;   // @n8n/n8n-nodes-langchain.lmChatAnthropic, .lmOpenAi, ...\n\nlet workflowPages = [];\ntry { workflowPages = $('List workflows').all(); } catch (e) { workflowPages = []; }\nconst llmWorkflows = new Set();\nfor (const page of workflowPages) {\n  for (const wf of page.json?.data ?? []) {\n    if ((wf.nodes ?? []).some((n) => MODEL_NODE.test(String(n.type ?? '')))) llmWorkflows.add(String(wf.id));\n  }\n}\n// No workflow list at all (API change, permissions): download everything rather than miss costs.\nconst knowsWorkflows = workflowPages.some((p) => Array.isArray(p.json?.data));\n\nconst ids = new Set();\nconst noLlm = new Map();\nlet listed = 0;\nfor (const page of $input.all()) {\n  for (const e of page.json?.data ?? []) {\n    listed++;\n    if (e?.id == null || !FINISHED.has(e.status)) continue;\n    const id = String(e.id);\n    if (!knowsWorkflows || llmWorkflows.has(String(e.workflowId))) ids.add(id);\n    else noLlm.set(id, {\n      execution_id: id,\n      workflow_id: String(e.workflowId ?? ''),\n      execution_status: e.status,\n      started_at: e.startedAt ?? e.createdAt,\n    });\n  }\n}\nreturn [{ json: { ids: [...ids], no_llm: [...noLlm.values()], listed } }];\n"
       },
       "name": "Finished ids",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
+        1100,
         0
       ],
       "id": "289275d4-28dd-5a67-9b36-6d9ad3d70097"
@@ -139,7 +189,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- Postgres node \"Pick unscanned\" in ops-cost-collector.\n-- $1 = {ids: [...]} finished execution ids from the listing.\n-- Returns at most 25 that were never scanned, oldest first: each needs its full data\n-- downloaded, so a backlog is worked off over several runs instead of in one huge run.\nSELECT t.id\nFROM jsonb_array_elements_text(coalesce($1::jsonb->'ids', '[]'::jsonb)) AS t(id)\nWHERE t.id ~ '^[0-9]+$'\n  AND NOT EXISTS (SELECT 1 FROM cost_scans s WHERE s.execution_id = t.id)\nORDER BY t.id::bigint\nLIMIT 25;\n",
+        "query": "-- Postgres node \"Pick unscanned\" in ops-cost-collector.\n-- $1 = {ids: [...], no_llm: [...]} from \"Finished ids\".\n--\n-- 1. Executions of workflows without a model node are marked scanned (0 calls) right here.\n-- 2. Of the rest, at most 25 never-scanned ids are returned, oldest first: each needs its\n--    full data downloaded, so a backlog is worked off over several runs.\nWITH input AS (\n    SELECT $1::jsonb AS j\n),\nmark AS (\n    INSERT INTO cost_scans (execution_id, workflow_id, execution_status, started_at, llm_calls)\n    SELECT s.execution_id, s.workflow_id, s.execution_status, s.started_at, 0\n    FROM input,\n         jsonb_to_recordset(coalesce(input.j->'no_llm', '[]'::jsonb)) AS s(\n             execution_id text, workflow_id text, execution_status text, started_at timestamptz)\n    WHERE s.execution_id ~ '^[0-9]+$' AND s.started_at IS NOT NULL\n    ON CONFLICT (execution_id) DO NOTHING\n    RETURNING 1\n)\nSELECT t.id, (SELECT count(*) FROM mark) AS marked_without_llm\nFROM input, jsonb_array_elements_text(coalesce(input.j->'ids', '[]'::jsonb)) AS t(id)\nWHERE t.id ~ '^[0-9]+$'\n  AND NOT EXISTS (SELECT 1 FROM cost_scans s WHERE s.execution_id = t.id)\nORDER BY t.id::bigint\nLIMIT 25;\n",
         "options": {
           "queryReplacement": "={{ JSON.stringify($json) }}"
         }
@@ -148,7 +198,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1100,
+        1320,
         0
       ],
       "id": "8a917d3b-11f2-50c9-8953-083b01da3453"
@@ -183,7 +233,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1320,
+        1540,
         0
       ],
       "id": "c1c756e3-da2d-55b0-b2c1-0c3038c08b97"
@@ -214,7 +264,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1540,
+        1760,
         -100
       ],
       "id": "a526734c-4688-5766-87d0-cb1410d18d5e",
@@ -228,7 +278,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1760,
+        1980,
         -100
       ],
       "id": "b3172649-ed5c-5b97-b6a2-649dd1248d04"
@@ -245,7 +295,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1980,
+        2200,
         -100
       ],
       "id": "34e2414b-c64e-5a08-9a79-e7decd08c8a0",
@@ -278,6 +328,17 @@
       ]
     },
     "Scan window": {
+      "main": [
+        [
+          {
+            "node": "List workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List workflows": {
       "main": [
         [
           {

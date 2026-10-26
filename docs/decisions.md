@@ -125,3 +125,7 @@ n8n's Anthropic node adds `cache_read_input_tokens` and `cache_creation_input_to
 ## 031. Prices have tiers by prompt length (2026-10-26)
 
 Claude Haiku 5.5 charges a higher rate for the whole request once the prompt is over 100,000 tokens. `model_prices.min_prompt_tokens` makes that a second row; the lookup takes the newest `valid_from`, then the highest tier the prompt reaches. Prices live in `infra/prices/model_prices.sql`, copied from each provider's own page with the source URL, re-runnable.
+
+## 032. Only executions of workflows with a model node are downloaded (2026-10-26)
+
+The first live run showed the cost: about 3,000 saved executions a day on this instance, almost all from workflows with no LLM (error handler, chaos, schedulers). Downloading each one's full data at 25 a minute meant two hours of backlog and pointless load. The collector now lists workflows once per run, and executions of workflows without a model node are marked scanned straight from the listing, with no download. The test is the workflow's current version, so an LLM node removed later means its old runs aren't counted. The listing window starts 2 hours before the newest downloaded execution and never more than a day back, so after a collector outage of more than a day the oldest LLM runs are missed. Both are accepted for a demo-sized instance; a real one would keep the workflow history.
