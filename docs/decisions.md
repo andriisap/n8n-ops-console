@@ -109,3 +109,19 @@ It runs every 30 s: 2,880 executions a day that would only fill n8n's database. 
 ## 019. Next.js 16.3.8, TypeScript 5.9 (2026-10-13)
 
 Latest patch of the 16.3 line rather than 16.4.0, which was a week old. TypeScript 7 (the Go rewrite) is skipped until Next lists it as supported.
+
+## 028. Costs are collected from n8n's execution data, not logged by each workflow (2026-10-26)
+
+The first plan was a `cost-meter` sub-workflow called after every LLM step. Reading n8n 2.42.5's source showed every model sub-node already records `tokenUsage` (or `tokenUsageEstimate`) and the model id in the execution data. `ops-cost-collector` reads finished executions through the public API and extracts the calls. No workflow has to change, a workflow someone forgets to instrument is still counted, and failed runs, which cost money too, are included. Only the model sub-node's runs are counted: the chain node above it repeats the same totals in `metadata.tracing`, and counting both would double every call. Captured on the real server and kept as a test fixture (`fixtures/execution-demo-triage.json`).
+
+## 029. Cost is computed in a view, never stored (2026-10-26)
+
+`llm_usage` keeps tokens; `llm_usage_costed` multiplies them by the price valid on the run's day (UTC) through `llm_price_for()`. A price added or corrected later applies to the past correctly, and there is one place where cost is computed. A model with no known price shows NULL ("no price"), never $0: a missing price must look missing.
+
+## 030. Anthropic cache tokens can't be priced separately (2026-10-26)
+
+n8n's Anthropic node adds `cache_read_input_tokens` and `cache_creation_input_tokens` into `promptTokens`. Cache reads cost a tenth of input on Haiku 5.5 and writes 1.25x, so with prompt caching on, the meter prices cached tokens as plain input. The demo workflow doesn't cache. Fixing it means reading usage from the raw API response, which n8n doesn't keep; the columns `cache_read_tokens` / `cache_write_tokens` are there for a provider that reports them.
+
+## 031. Prices have tiers by prompt length (2026-10-26)
+
+Claude Haiku 5.5 charges a higher rate for the whole request once the prompt is over 100,000 tokens. `model_prices.min_prompt_tokens` makes that a second row; the lookup takes the newest `valid_from`, then the highest tier the prompt reaches. Prices live in `infra/prices/model_prices.sql`, copied from each provider's own page with the source URL, re-runnable.
