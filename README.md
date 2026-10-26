@@ -52,6 +52,8 @@ node workflows/ops/src/build-fallback-alert.test.js     # fallback message never
 node workflows/ops/src/retry-scheduler.test.js          # every n8n retry API answer → outcome; alert texts
 python3 infra/tests/test_upsert_incident.py             # dedup, idempotency, reopen, retry queueing, no loop
 python3 infra/tests/test_retry_queue.py                 # lease, backoff, give-up, parallel runs, Replay permissions
+node workflows/ops/src/extract-llm-calls.test.js        # LLM calls from a real execution: no double count, estimates, failures
+python3 infra/tests/test_llm_usage.py                   # pricing by date and tier, idempotent recording, NULL for unknown prices
 ```
 
 The Python tests need a scratch Postgres with all migrations applied (they truncate the tables).
