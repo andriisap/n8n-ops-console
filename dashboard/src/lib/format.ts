@@ -43,3 +43,21 @@ export function count(n: number | null | undefined): string {
 export function perMtok(v: number | null): string {
   return v === null ? '—' : `$${Number(v.toFixed(4))}`;
 }
+
+// A duration in seconds, short and readable: 48 s, 3 min, 2 h 15 min, 3.5 days.
+export function duration(s: number | null | undefined): string {
+  if (s === null || s === undefined || !Number.isFinite(s)) return '—';
+  if (s < 90) return `${Math.round(s)} s`;
+  if (s < 90 * 60) return `${Math.round(s / 60)} min`;
+  if (s < 48 * 3600) {
+    const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+    return m === 0 ? `${h} h` : m === 60 ? `${h + 1} h` : `${h} h ${m} min`;
+  }
+  return `${Number((s / 86400).toFixed(1))} days`;
+}
+
+export function percent(share: number): string {
+  if (!Number.isFinite(share)) return '—';
+  const p = share * 100;
+  return p > 0 && p < 1 ? '<1 %' : `${Math.round(p)} %`;
+}

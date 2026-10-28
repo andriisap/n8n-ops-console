@@ -10,3 +10,7 @@ next-env.d.ts
 *.tsbuildinfo
 __pycache__/
 execution-*.json
+
+# written by `next dev` for coding agents
+dashboard/AGENTS.md
+dashboard/CLAUDE.md

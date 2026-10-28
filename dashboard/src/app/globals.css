@@ -20,6 +20,14 @@
   --c-validation: #6b3fb5;
   --c-unknown: #5d6573;
 
+  /* Chart fills per error class (validated: scripts/validate_palette.js, decision 038).
+     The --c-* colors above are text colors; marks use these. */
+  --f-transient: #2a78d6;
+  --f-rate_limit: #eda100;
+  --f-auth: #e87ba4;
+  --f-validation: #6250d6;
+  --f-unknown: #8a8f98;
+
   --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
   color-scheme: light;
@@ -47,6 +55,12 @@
     --c-auth: #f17ab8;
     --c-validation: #b394f5;
     --c-unknown: #9099a8;
+
+    --f-transient: #3987e5;
+    --f-rate_limit: #c98500;
+    --f-auth: #d55181;
+    --f-validation: #9085e9;
+    --f-unknown: #6b717c;
     color-scheme: dark;
   }
 }
@@ -211,7 +225,7 @@ details pre {
   position: absolute; top: 0; left: 0; font-size: 11px; color: var(--muted); font-family: var(--mono);
 }
 .bars {
-  display: grid; grid-template-columns: repeat(14, 1fr); gap: 2px; height: 180px;
+  display: grid; grid-template-columns: repeat(var(--n, 14), 1fr); gap: 2px; height: 180px;
   border-top: 1px dashed var(--border); border-bottom: 1px solid var(--border);
 }
 .bar-col { position: relative; display: flex; align-items: flex-end; justify-content: center; outline: none; }
@@ -243,4 +257,45 @@ details pre {
   .bar-x { font-size: 10px; }
   .hide-sm { display: none; }
   .msg { max-width: 220px; }
+}
+
+/* Failures per day, stacked by error class. 2px surface gaps between segments. */
+.stack { width: min(70%, 36px); display: flex; flex-direction: column-reverse; gap: 2px; height: 100%; justify-content: flex-start; }
+.seg { width: 100%; min-height: 2px; }
+.stack .seg:last-child { border-radius: 4px 4px 0 0; }
+.bar-col:hover .seg, .bar-col:focus-visible .seg { filter: brightness(1.12); }
+.f-transient { background: var(--f-transient); }
+.f-rate_limit { background: var(--f-rate_limit); }
+.f-auth { background: var(--f-auth); }
+.f-validation { background: var(--f-validation); }
+.f-unknown { background: var(--f-unknown); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin: 0 0 10px; padding: 0; list-style: none; }
+.tip .row { display: flex; justify-content: space-between; gap: 12px; }
+.tip .row b { font-weight: 500; color: var(--text); font-family: var(--sans); }
+
+/* Share of failures per class: one bar per row, label and number in text colors */
+.shares { list-style: none; margin: 0; padding: 4px 16px 12px; }
+.shares li { display: grid; grid-template-columns: 96px 1fr 72px; gap: 10px; align-items: center; padding: 6px 0; }
+.shares a { color: inherit; }
+.share-track { height: 10px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.share-fill { height: 100%; border-radius: 0 4px 4px 0; }
+
+/* Filter row above the metrics */
+.filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 16px; }
+.filters .tabs { margin: 0; }
+.select {
+  font: inherit; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); max-width: 100%;
+}
+.toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.trend-up { color: var(--open); }
+.trend-down { color: var(--resolved); }
+.note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 0 16px; }
+.grid-2 .table-wrap .table { min-width: 0; }
+@media (max-width: 860px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) {
+  .topbar { flex-wrap: wrap; gap: 8px; }
+  .brand h1 { white-space: nowrap; }
 }

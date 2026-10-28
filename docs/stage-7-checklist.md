@@ -9,8 +9,11 @@ Plan: [decision 037](decisions.md). Each step is one pull request.
 - [ ] Check: `SELECT to_status, count(*) FROM incident_status_log GROUP BY 1;` → one `open` per incident, plus one row per resolved or ignored incident
 - [ ] Check: `SELECT count(*), round(avg(extract(epoch FROM time_to_recover))) AS avg_s FROM auto_recoveries;` → the chaos-recover runs of stage 4 (~1 min each)
 
-## 2. Metrics queries (lib/metrics.ts) with tests
-## 3. /metrics page
+## 2–3. Metrics queries and the /metrics page (PR #17)
+
+- [x] `dashboard/src/lib/metrics.ts`: summary, failing nodes, classes, failures per day, workflow list; 9 tests against a scratch Postgres (`npm test` in `dashboard/`)
+- [x] Chart fills per class validated for both themes (decision 038)
+- [ ] Merge, new image tag in the Hostinger YAML → Deploy (or together with step 4)
 ## 4. Filters on incidents and metrics
 ## 5. Empty and error states, loading skeletons
 ## 6. Dark theme switch, contrast check
