@@ -133,7 +133,7 @@ The monitoring itself costs nothing extra: the watchdog uses about 6,000 of the 
 
 ## How it was built
 
-Eight stages, each with a checklist of what was done and checked on the live server: [stage 0](docs/stage-0-checklist.md) (n8n and chaos workflows) → [1](docs/stage-1-checklist.md) (ops database) → [2](docs/stage-2-checklist.md) (error handler) → [3](docs/stage-3-checklist.md) (dashboard) → [4](docs/stage-4-checklist.md) (retries and Replay) → [5](docs/stage-5-checklist.md) (LLM cost) → [6](docs/stage-6-checklist.md) (watchdog) → [7](docs/stage-7-checklist.md) (metrics and UI).
+Eight stages, each with a checklist of what was done and checked on the live server: [stage 0](docs/stage-0-checklist.md) (n8n and chaos workflows) → [1](docs/stage-1-checklist.md) (ops database) → [2](docs/stage-2-checklist.md) (error handler) → [3](docs/stage-3-checklist.md) (dashboard) → [4](docs/stage-4-checklist.md) (retries and Replay) → [5](docs/stage-5-checklist.md) (LLM cost) → [6](docs/stage-6-checklist.md) (watchdog) → [7](docs/stage-7-checklist.md) (metrics and UI) → [8](docs/stage-8-checklist.md) (README, CI, Tailwind, end-to-end tests).
 
 ## Dashboard
 
@@ -219,4 +219,4 @@ Note: n8n only calls an error workflow for production runs. Manual runs from the
 
 ## Tested on
 
-n8n 2.42.5 (self-hosted, Docker), Postgres 17, Next.js 16.3.8, Node 22, Cloudflare Workers with D1, October 2026.
+n8n 2.42.5 (self-hosted, Docker), Postgres 17, Next.js 16.3.8 with Tailwind CSS 4.3, Node 22, Playwright 1.56, Cloudflare Workers with D1, October 2026.
