@@ -14,8 +14,8 @@ export type Period = (typeof PERIODS)[number];
 
 export type MetricsFilter = {
   days: Period;
-  workflow: string | null;   // workflow_id
-  hideTest: boolean;         // leave out chaos-* workflows
+  workflow: string | null; // workflow_id
+  hideTest: boolean; // leave out chaos-* workflows
 };
 
 export const TEST_WORKFLOW_PATTERN = 'chaos-%';
@@ -39,11 +39,11 @@ export type Duration = { n: number; median_s: number | null; p90_s: number | nul
 
 export type MetricsSummary = {
   failures: number;
-  failures_before: number;        // the period before, for the trend
-  incidents_hit: number;          // distinct incidents with a failure in the period
-  incidents_new: number;          // first seen in the period
-  recover: Duration;              // automatic retry that succeeded
-  retried: number;                // automatic retry jobs that finished in the period
+  failures_before: number; // the period before, for the trend
+  incidents_hit: number; // distinct incidents with a failure in the period
+  incidents_new: number; // first seen in the period
+  recover: Duration; // automatic retry that succeeded
+  retried: number; // automatic retry jobs that finished in the period
   resolve: Duration & { backfilled: number };
 };
 
@@ -54,8 +54,13 @@ const DURATION = (col: string) => `
 
 export async function summary(db: Db, f: MetricsFilter): Promise<MetricsSummary> {
   const { rows } = await db.query<{
-    failures: number; failures_before: number; incidents_hit: number; incidents_new: number;
-    rec: Duration; retried: number; res: Duration & { backfilled: number };
+    failures: number;
+    failures_before: number;
+    incidents_hit: number;
+    incidents_new: number;
+    rec: Duration;
+    retried: number;
+    res: Duration & { backfilled: number };
   }>(
     `WITH cur AS (${failuresIn(0)}),
           rec AS (
@@ -81,9 +86,13 @@ export async function summary(db: Db, f: MetricsFilter): Promise<MetricsSummary>
   );
   const r = rows[0];
   return {
-    failures: r.failures, failures_before: r.failures_before,
-    incidents_hit: r.incidents_hit, incidents_new: r.incidents_new,
-    recover: r.rec, retried: r.retried, resolve: r.res,
+    failures: r.failures,
+    failures_before: r.failures_before,
+    incidents_hit: r.incidents_hit,
+    incidents_new: r.incidents_new,
+    recover: r.rec,
+    retried: r.retried,
+    resolve: r.res,
   };
 }
 
@@ -93,7 +102,7 @@ export type NodeFailures = {
   node_name: string | null;
   failures: number;
   incidents: number;
-  top_class: string;              // the most frequent class for this node
+  top_class: string; // the most frequent class for this node
   last_at: Date;
 };
 

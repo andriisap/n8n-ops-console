@@ -11,7 +11,7 @@ function createPool(): Pool {
   }
   return new Pool({
     connectionString,
-    max: 5,                        // ops-db is shared with n8n; keep our share small
+    max: 5, // ops-db is shared with n8n; keep our share small
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
     application_name: 'ops-dashboard',

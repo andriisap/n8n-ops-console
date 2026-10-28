@@ -29,16 +29,17 @@ export type ErrorEvent = {
   error_message: string;
   error_raw: Record<string, unknown> | null;
   occurred_at: Date;
-  retry_of: string | null;              // set when this failure was itself a retry
+  retry_of: string | null; // set when this failure was itself a retry
   // latest retry job for this execution, if any
   retry_status: RetryStatus | null;
   retry_kind: 'auto' | 'manual' | null;
   retry_attempt: number | null;
   retry_max: number | null;
   retry_next_at: Date | null;
+  retry_due: boolean; // next attempt is due (database clock)
   retry_execution_id: string | null;
   retry_last_error: string | null;
-  recovered: boolean;                   // some retry of this execution succeeded
+  recovered: boolean; // some retry of this execution succeeded
   // the run that succeeded, and what its LLM calls cost (null: no calls recorded, or not yet)
   recovered_execution_id: string | null;
   recovered_kind: 'auto' | 'manual' | null;
@@ -94,10 +95,7 @@ export async function workflowChoices(): Promise<WorkflowChoice[]> {
 }
 
 export async function getIncident(id: number): Promise<Incident | null> {
-  const { rows } = await db().query<Incident>(
-    `SELECT ${INCIDENT_COLUMNS} FROM incidents WHERE id = $1`,
-    [id],
-  );
+  const { rows } = await db().query<Incident>(`SELECT ${INCIDENT_COLUMNS} FROM incidents WHERE id = $1`, [id]);
   return rows[0] ?? null;
 }
 
@@ -107,6 +105,7 @@ export async function listEvents(incidentId: number, limit = 50): Promise<ErrorE
             e.error_raw, e.occurred_at, e.retry_of,
             rq.status AS retry_status, rq.kind AS retry_kind, rq.attempt AS retry_attempt,
             rq.max_attempts AS retry_max, rq.next_attempt_at AS retry_next_at,
+            coalesce(rq.next_attempt_at <= now(), false) AS retry_due,
             rq.retry_execution_id, rq.last_error AS retry_last_error,
             ok.kind IS NOT NULL AS recovered,
             ok.retry_execution_id AS recovered_execution_id, ok.kind AS recovered_kind,

@@ -15,10 +15,10 @@ export const SEEN_WITHIN = [1, 7, 30] as const;
 
 export type IncidentFilter = {
   status: Status | 'all';
-  workflow: string | null;          // workflow_id
+  workflow: string | null; // workflow_id
   errorClass: ErrorClass | null;
-  days: number | null;              // last seen within N days; null = any time
-  q: string | null;                 // text in workflow, node or message
+  days: number | null; // last seen within N days; null = any time
+  q: string | null; // text in workflow, node or message
 };
 
 export type IncidentSearch = { status?: string; wf?: string; class?: string; days?: string; q?: string };
@@ -49,4 +49,3 @@ export function incidentQuery(f: IncidentFilter, patch: Partial<IncidentFilter> 
 }
 
 export const isFiltered = (f: IncidentFilter) => !!(f.workflow || f.errorClass || f.days || f.q);
-

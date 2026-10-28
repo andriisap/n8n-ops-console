@@ -1,22 +1,35 @@
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { changeStatus } from '@/app/actions';
 import { ClassLabel, StatusBadge } from '@/components/Badges';
+import { ExternalLink } from '@/components/ExternalLink';
 import RetryCell from '@/components/RetryCell';
+import { SubmitButton } from '@/components/SubmitButton';
+import { Card, EmptyState, Section, Stat } from '@/components/ui/card';
+import { Table, TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { ago, exact } from '@/lib/format';
 import { getIncident, listEvents, type Status } from '@/lib/incidents';
 
 export const dynamic = 'force-dynamic';
+
+const EVENTS = 50;
 
 function StatusButton({ id, to, label, primary }: { id: number; to: Status; label: string; primary?: boolean }) {
   return (
     <form action={changeStatus}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={to} />
-      <button type="submit" className={primary ? 'btn primary' : 'btn'}>{label}</button>
+      <SubmitButton variant={primary ? 'primary' : 'default'}>{label}</SubmitButton>
     </form>
   );
 }
+
+const When = ({ at }: { at: Date | null }) => (
+  <span className="font-sans text-sm font-medium" title={exact(at)}>
+    {ago(at)}
+  </span>
+);
 
 export default async function IncidentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: raw } = await params;
@@ -25,25 +38,27 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
 
   const incident = await getIncident(id);
   if (!incident) notFound();
-  const events = await listEvents(id);
+  const events = await listEvents(id, EVENTS);
 
   return (
     <main>
-      <Link href="/" className="back">← All incidents</Link>
+      <Link href="/" className="mb-3 inline-flex items-center gap-1 text-muted">
+        <ArrowLeft className="size-4" aria-hidden /> All incidents
+      </Link>
 
-      <div className="head">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2>
+          <h2 className="mb-1 text-xl font-semibold tracking-tight">
             #{incident.id} {incident.workflow_name}
-            {incident.node_name && <span className="node"> → {incident.node_name}</span>}
+            {incident.node_name && <span className="text-muted"> → {incident.node_name}</span>}
           </h2>
-          <div className="sub">
+          <div className="flex flex-wrap items-center gap-2.5 text-muted">
             <StatusBadge status={incident.status} />
             <ClassLabel value={incident.error_class} />
             {incident.reopened_count > 0 && <span>reopened {incident.reopened_count}×</span>}
           </div>
         </div>
-        <div className="actions">
+        <div className="flex gap-2">
           {incident.status === 'open' && (
             <>
               <StatusButton id={id} to="resolved" label="Resolve" primary />
@@ -54,57 +69,84 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      <section className="stats">
-        <div className="stat"><div className="k">Occurrences</div><div className="v">{incident.occurrences}</div></div>
-        <div className="stat"><div className="k">First seen</div><div className="v small" title={exact(incident.first_seen_at)}>{ago(incident.first_seen_at)}</div></div>
-        <div className="stat"><div className="k">Last seen</div><div className="v small" title={exact(incident.last_seen_at)}>{ago(incident.last_seen_at)}</div></div>
-        <div className="stat"><div className="k">Last alert</div><div className="v small" title={exact(incident.last_alerted_at)}>{ago(incident.last_alerted_at)}</div></div>
+      <section className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+        <Stat label="Occurrences" value={incident.occurrences} />
+        <Stat label="First seen" value={<When at={incident.first_seen_at} />} />
+        <Stat label="Last seen" value={<When at={incident.last_seen_at} />} />
+        <Stat label="Last alert" value={<When at={incident.last_alerted_at} />} />
       </section>
 
-      <h3>Normalized message</h3>
-      <div className="message">{incident.error_message}</div>
+      <Section title="Normalized message">
+        <div className="rounded-xl border border-border bg-surface px-3.5 py-3 font-mono text-[13px] break-words whitespace-pre-wrap">
+          {incident.error_message}
+        </div>
+      </Section>
 
-      <h3>Recent events <span className="node">({events.length}{events.length === 50 ? '+' : ''})</span></h3>
-      <div className="card">
-        {events.length === 0 ? (
-          <div className="empty">No events recorded.</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Execution</th>
-                <th>When</th>
-                <th className="hide-sm">Mode</th>
-                <th>Error</th>
-                <th>Retry</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((e) => (
-                <tr key={e.id}>
-                  <td className="id">
-                    {e.execution_url
-                      ? <a href={e.execution_url} target="_blank" rel="noreferrer">{e.execution_id} ↗</a>
-                      : e.execution_id}
-                  </td>
-                  <td className="when" title={exact(e.occurred_at)}>{ago(e.occurred_at)}</td>
-                  <td className="hide-sm node">{e.execution_mode ?? '—'}</td>
-                  <td>
-                    <div className="msg" title={e.error_message}>{e.error_message}</div>
-                    {e.error_raw && (
-                      <details>
-                        <summary>raw error</summary>
-                        <pre>{JSON.stringify(e.error_raw, null, 2)}</pre>
-                      </details>
-                    )}
-                  </td>
-                  <td><RetryCell event={e} incidentId={id} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Section
+        title={
+          <>
+            Recent events{' '}
+            <span className="font-normal text-muted">
+              ({events.length}
+              {events.length === EVENTS ? '+' : ''})
+            </span>
+          </>
+        }
+      >
+        <Card>
+          {events.length === 0 ? (
+            <EmptyState>No events recorded.</EmptyState>
+          ) : (
+            <Table>
+              <thead>
+                <TableRow>
+                  <TableHead>Execution</TableHead>
+                  <TableHead>When</TableHead>
+                  <TableHead className="max-md:hidden">Mode</TableHead>
+                  <TableHead>Error</TableHead>
+                  <TableHead>Retry</TableHead>
+                </TableRow>
+              </thead>
+              <tbody>
+                {events.map((e) => (
+                  <TableRow key={e.id} data-testid="event-row">
+                    <TableCell className="font-mono whitespace-nowrap text-muted">
+                      {e.execution_url ? (
+                        <ExternalLink href={e.execution_url}>{e.execution_id}</ExternalLink>
+                      ) : (
+                        e.execution_id
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted" title={exact(e.occurred_at)}>
+                      {ago(e.occurred_at)}
+                    </TableCell>
+                    <TableCell className="text-muted max-md:hidden">{e.execution_mode ?? '—'}</TableCell>
+                    <TableCell>
+                      <div
+                        className="max-w-[220px] truncate font-mono text-xs text-muted md:max-w-[520px]"
+                        title={e.error_message}
+                      >
+                        {e.error_message}
+                      </div>
+                      {e.error_raw && (
+                        <details>
+                          <summary>raw error</summary>
+                          <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-surface-2 p-2.5 font-mono text-xs break-words whitespace-pre-wrap">
+                            {JSON.stringify(e.error_raw, null, 2)}
+                          </pre>
+                        </details>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <RetryCell event={e} incidentId={id} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </Card>
+      </Section>
     </main>
   );
 }

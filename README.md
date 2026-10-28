@@ -1,5 +1,7 @@
 # n8n Ops Console
 
+[![ci](https://github.com/andriisap/n8n-ops-console/actions/workflows/ci.yml/badge.svg)](https://github.com/andriisap/n8n-ops-console/actions/workflows/ci.yml)
+
 A reliability layer for self-hosted n8n. Every failed workflow becomes an incident with a class and a fingerprint, transient failures are retried with backoff, every LLM call is priced, a watchdog outside the server checks that n8n and the alert path are alive, and a Next.js dashboard shows all of it.
 
 Built as a portfolio project by a React/Next.js developer moving into AI automation. It runs on a real n8n 2.42.5 instance, and every failure mode in the table below was broken on purpose and watched.
@@ -137,7 +139,8 @@ Eight stages, each with a checklist of what was done and checked on the live ser
 
 | Part | Choice |
 | --- | --- |
-| App | Next.js 16 App Router, server components query Postgres, one server action writes |
+| App | Next.js 16 App Router, server components query Postgres, server actions write |
+| UI | Tailwind CSS v4 with the design tokens in `@theme`, shadcn-style components (Radix Select, cva variants), lucide icons; charts are server-rendered HTML, no chart library |
 | Database access | `ops_dashboard` role: SELECT everywhere, UPDATE on `incidents.status` and `resolved_at` only |
 | Delivery | GitHub Actions → GHCR image tagged `sha-<commit>` → pulled by the server |
 | Access | Traefik basic auth, HTTPS from Let's Encrypt, no published port |
@@ -167,11 +170,12 @@ python3 infra/tests/test_cost_collector.py              # scan window, oldest-fi
 python3 infra/tests/test_budget.py                      # one 💸 alert a day, retried until delivered
 python3 infra/tests/test_metrics_db.py                  # status log: every change, who made it, backfill; recovery views
 (cd dashboard && npm test)                              # /metrics queries against Postgres: counts, times, filters, empty data
+(cd dashboard && npm run build && npm run e2e)          # Playwright: filters, Replay, Resolve, 404s, theme, no sideways scroll, axe a11y
 (cd watchdog && npm test)                               # watchdog: silence and probe thresholds, alert once per change
 node workflows/ops/src/budget-alert.test.js             # alert text: amounts, top workflows, unpriced warning
 ```
 
-The Python tests need a scratch Postgres with all migrations applied (they truncate the tables).
+The Python and dashboard tests need a scratch Postgres with all migrations applied (they truncate the tables): `./scripts/ci-migrate.sh` sets one up from the `PG*` variables. CI runs all of the above on every pull request, plus `npm run lint`, `format:check` and a production build of the dashboard ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
 After editing anything in `workflows/ops/src/`, rebuild the importable JSON:
 
