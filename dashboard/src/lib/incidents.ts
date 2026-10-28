@@ -1,10 +1,7 @@
 import { db } from './db';
+import type { ErrorClass, IncidentFilter, Status } from './incident-filter';
 
-export const STATUSES = ['open', 'resolved', 'ignored'] as const;
-export type Status = (typeof STATUSES)[number];
-
-export const ERROR_CLASSES = ['rate_limit', 'transient', 'auth', 'validation', 'unknown'] as const;
-export type ErrorClass = (typeof ERROR_CLASSES)[number];
+export * from './incident-filter';
 
 export type Incident = {
   id: number;
@@ -44,33 +41,50 @@ export type ErrorEvent = {
   recovered: boolean;                   // some retry of this execution succeeded
 };
 
-export function isStatus(v: unknown): v is Status {
-  return typeof v === 'string' && (STATUSES as readonly string[]).includes(v);
-}
-
 const INCIDENT_COLUMNS = `
   id::int, workflow_id, workflow_name, node_name, error_class, error_message, status,
   occurrences, reopened_count, first_seen_at, last_seen_at, resolved_at, last_alerted_at`;
 
-export async function listIncidents(status: Status | 'all'): Promise<Incident[]> {
+// Everything but the status: the tabs count within the rest of the filter.
+// $1 workflow, $2 class, $3 days, $4 text (ILIKE, wildcards escaped).
+const SCOPE = `
+  ($1::text IS NULL OR workflow_id = $1)
+  AND ($2::text IS NULL OR error_class = $2)
+  AND ($3::int IS NULL OR last_seen_at >= now() - make_interval(days => $3::int))
+  AND ($4::text IS NULL OR workflow_name ILIKE $4 OR node_name ILIKE $4 OR error_message ILIKE $4)`;
+
+const like = (q: string | null) => (q ? `%${q.replace(/[\\%_]/g, (c) => '\\' + c)}%` : null);
+const scopeParams = (f: IncidentFilter) => [f.workflow, f.errorClass, f.days, like(f.q)];
+
+export async function listIncidents(f: IncidentFilter): Promise<Incident[]> {
   const { rows } = await db().query<Incident>(
     `SELECT ${INCIDENT_COLUMNS}
        FROM incidents
-      WHERE $1 = 'all' OR status = $1
+      WHERE ($5 = 'all' OR status = $5) AND ${SCOPE}
       ORDER BY (status = 'open') DESC, last_seen_at DESC
       LIMIT 200`,
-    [status],
+    [...scopeParams(f), f.status],
   );
   return rows;
 }
 
-export async function countByStatus(): Promise<Record<Status, number>> {
+export async function countByStatus(f: IncidentFilter): Promise<Record<Status, number>> {
   const { rows } = await db().query<{ status: Status; n: number }>(
-    `SELECT status, count(*)::int AS n FROM incidents GROUP BY status`,
+    `SELECT status, count(*)::int AS n FROM incidents WHERE ${SCOPE} GROUP BY status`,
+    scopeParams(f),
   );
   const counts: Record<Status, number> = { open: 0, resolved: 0, ignored: 0 };
   for (const r of rows) counts[r.status] = r.n;
   return counts;
+}
+
+export type WorkflowChoice = { workflow_id: string; workflow_name: string };
+
+export async function workflowChoices(): Promise<WorkflowChoice[]> {
+  const { rows } = await db().query<WorkflowChoice>(
+    `SELECT workflow_id, max(workflow_name) AS workflow_name FROM incidents GROUP BY workflow_id ORDER BY 2`,
+  );
+  return rows;
 }
 
 export async function getIncident(id: number): Promise<Incident | null> {
