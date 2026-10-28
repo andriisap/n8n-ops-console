@@ -170,6 +170,7 @@ python3 infra/tests/test_cost_collector.py              # scan window, oldest-fi
 python3 infra/tests/test_budget.py                      # one 💸 alert a day, retried until delivered
 python3 infra/tests/test_metrics_db.py                  # status log: every change, who made it, backfill; recovery views
 (cd dashboard && npm test)                              # /metrics queries against Postgres: counts, times, filters, empty data
+(cd dashboard && npm run build && npm run e2e)          # Playwright: filters, Replay, Resolve, 404s, theme, no sideways scroll, axe a11y
 (cd watchdog && npm test)                               # watchdog: silence and probe thresholds, alert once per change
 node workflows/ops/src/budget-alert.test.js             # alert text: amounts, top workflows, unpriced warning
 ```

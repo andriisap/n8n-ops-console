@@ -40,7 +40,12 @@ export function LinkTab({
       )}
     >
       {children}
-      {count !== undefined && <span className="ml-1.5 font-mono text-xs text-muted">{count}</span>}
+      {count !== undefined && (
+        <>
+          {' '}
+          <span className="ml-1 font-mono text-xs text-muted">{count}</span>
+        </>
+      )}
     </Link>
   );
 }

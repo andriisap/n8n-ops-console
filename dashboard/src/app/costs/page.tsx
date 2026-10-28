@@ -152,7 +152,7 @@ export default async function CostsPage() {
                                 {m.source_url && (
                                   <>
                                     {' · '}
-                                    <a href={m.source_url} target="_blank" rel="noreferrer">
+                                    <a href={m.source_url} target="_blank" rel="noreferrer" className="underline">
                                       source
                                     </a>
                                   </>

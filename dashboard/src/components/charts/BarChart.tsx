@@ -33,6 +33,7 @@ export function BarChart({ bars, maxLabel, labelEvery }: { bars: Bar[]; maxLabel
             <div
               key={b.key}
               tabIndex={0}
+              data-testid="bar"
               className="group relative flex items-end justify-center rounded-t-md outline-none hover:bg-surface-2 focus-visible:bg-surface-2"
             >
               {!b.empty && (
