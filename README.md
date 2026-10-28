@@ -6,6 +6,8 @@ A reliability layer for self-hosted n8n. Every failed workflow becomes an incide
 
 Built as a portfolio project by a React/Next.js developer moving into AI automation. It runs on a real n8n 2.42.5 instance, and every failure mode in the table below was broken on purpose and watched.
 
+Status: v1.0, all eight stages done in October 2026.
+
 ![Metrics page of the dashboard: failures per day by error class, time to recover, failing nodes](docs/img/metrics-dark.png)
 
 ## Problem
