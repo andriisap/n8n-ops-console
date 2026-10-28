@@ -26,7 +26,9 @@ export default function RetryCell({ event: e, incidentId }: { event: ErrorEvent;
         {e.recovered_execution_id ? ` (${e.recovered_execution_id})` : ''}
         {e.recovered_calls ? (
           <span className="retry-cost" title="LLM calls of the run that succeeded, priced like /costs">
-            {' '}· {e.recovered_cost === null ? 'no price' : usd(e.recovered_cost)} for {e.recovered_calls} LLM call{e.recovered_calls > 1 ? 's' : ''}
+            {' '}
+            · {e.recovered_cost === null ? 'no price' : usd(e.recovered_cost)} for {e.recovered_calls} LLM call
+            {e.recovered_calls > 1 ? 's' : ''}
             {e.recovered_unpriced ? `, ${e.recovered_unpriced} without price` : ''}
           </span>
         ) : null}
@@ -44,9 +46,7 @@ export default function RetryCell({ event: e, incidentId }: { event: ErrorEvent;
           {e.retry_kind === 'manual'
             ? 'replay queued'
             : `retry ${(e.retry_attempt ?? 0) + 1}/${e.retry_max} ${
-                e.retry_next_at && new Date(e.retry_next_at).getTime() > Date.now()
-                  ? ago(e.retry_next_at)
-                  : 'due now'
+                e.retry_next_at && !e.retry_due ? ago(e.retry_next_at) : 'due now'
               }`}
         </span>
       );

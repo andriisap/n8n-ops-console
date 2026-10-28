@@ -22,7 +22,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <div className="shell">
           <header className="topbar">
             <div className="brand">
-              <h1><Link href="/">n8n Ops Console</Link></h1>
+              <h1>
+                <Link href="/">n8n Ops Console</Link>
+              </h1>
               <NavLinks />
             </div>
             <div className="top-right">

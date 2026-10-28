@@ -50,7 +50,8 @@ export function duration(s: number | null | undefined): string {
   if (s < 90) return `${Math.round(s)} s`;
   if (s < 90 * 60) return `${Math.round(s / 60)} min`;
   if (s < 48 * 3600) {
-    const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+    const h = Math.floor(s / 3600),
+      m = Math.round((s % 3600) / 60);
     return m === 0 ? `${h} h` : m === 60 ? `${h + 1} h` : `${h} h ${m} min`;
   }
   return `${Number((s / 86400).toFixed(1))} days`;

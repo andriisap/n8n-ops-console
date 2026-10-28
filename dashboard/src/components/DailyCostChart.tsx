@@ -6,7 +6,8 @@ import type { Day } from '@/lib/costs';
 // numbers in a tooltip. The same numbers are available as a table below the chart.
 export default function DailyCostChart({ days }: { days: Day[] }) {
   const max = Math.max(...days.map((d) => d.cost), 0);
-  const label = (d: Day) => new Date(`${d.day}T00:00:00Z`).toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const label = (d: Day) =>
+    new Date(`${d.day}T00:00:00Z`).toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
   return (
     <figure className="chart" aria-label="LLM spend per day, last 14 days (UTC)">
@@ -21,11 +22,15 @@ export default function DailyCostChart({ days }: { days: Day[] }) {
                 <div className="tip" role="tooltip">
                   <strong>{label(d)}</strong>
                   <span>{usd(d.cost)}</span>
-                  <span>{d.calls} calls · {d.runs} runs</span>
+                  <span>
+                    {d.calls} calls · {d.runs} runs
+                  </span>
                   {d.unpriced > 0 && <span className="warn">{d.unpriced} without price</span>}
                 </div>
                 {/* every other day, counted back from today, so the last label is always today */}
-                <div className="bar-x" aria-hidden="true">{(days.length - 1 - i) % 2 === 0 ? label(d) : ''}</div>
+                <div className="bar-x" aria-hidden="true">
+                  {(days.length - 1 - i) % 2 === 0 ? label(d) : ''}
+                </div>
               </div>
             );
           })}
@@ -35,7 +40,13 @@ export default function DailyCostChart({ days }: { days: Day[] }) {
         <summary>Show as table</summary>
         <table className="table">
           <thead>
-            <tr><th>Day (UTC)</th><th className="num">Spend</th><th className="num">Calls</th><th className="num">Runs</th><th className="num">No price</th></tr>
+            <tr>
+              <th>Day (UTC)</th>
+              <th className="num">Spend</th>
+              <th className="num">Calls</th>
+              <th className="num">Runs</th>
+              <th className="num">No price</th>
+            </tr>
           </thead>
           <tbody>
             {[...days].reverse().map((d) => (

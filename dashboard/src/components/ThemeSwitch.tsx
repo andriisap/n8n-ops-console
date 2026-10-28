@@ -24,8 +24,13 @@ export default function ThemeSwitch({ initial }: { initial: Theme }) {
   }
 
   return (
-    <button type="button" className="theme-switch" onClick={cycle}
-      title={`Theme: ${theme}. Click for ${NEXT[theme]}.`} aria-label={`Theme: ${theme}. Switch to ${NEXT[theme]}`}>
+    <button
+      type="button"
+      className="theme-switch"
+      onClick={cycle}
+      title={`Theme: ${theme}. Click for ${NEXT[theme]}.`}
+      aria-label={`Theme: ${theme}. Switch to ${NEXT[theme]}`}
+    >
       Theme: {theme}
     </button>
   );

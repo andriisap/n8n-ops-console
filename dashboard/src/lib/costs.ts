@@ -5,11 +5,11 @@ import { db } from './db';
 // page can say "no price" instead of showing $0. Days are UTC days, like the budget alert.
 
 export type Totals = {
-  cost: number;          // sum of priced calls
+  cost: number; // sum of priced calls
   calls: number;
   runs: number;
-  unpriced: number;      // calls without a price: real spend is higher than cost
-  estimated: number;     // calls with tokenUsageEstimate instead of provider numbers
+  unpriced: number; // calls without a price: real spend is higher than cost
+  estimated: number; // calls with tokenUsageEstimate instead of provider numbers
   tokens_in: number;
   tokens_out: number;
 };
@@ -26,7 +26,7 @@ export type ModelCost = {
   calls: number;
   tokens_in: number;
   tokens_out: number;
-  cost: number | null;   // null: no price for any of its calls
+  cost: number | null; // null: no price for any of its calls
   unpriced: number;
   input_per_mtok: number | null;
   output_per_mtok: number | null;
@@ -62,10 +62,9 @@ const TOTALS = `
 const SINCE = `(date_trunc('day', now() AT TIME ZONE 'UTC') - make_interval(days => $1::int - 1)) AT TIME ZONE 'UTC'`;
 
 async function totals(days: number): Promise<Totals> {
-  const { rows } = await db().query<Totals>(
-    `SELECT ${TOTALS} FROM llm_usage_costed WHERE started_at >= ${SINCE}`,
-    [days],
-  );
+  const { rows } = await db().query<Totals>(`SELECT ${TOTALS} FROM llm_usage_costed WHERE started_at >= ${SINCE}`, [
+    days,
+  ]);
   return rows[0];
 }
 
@@ -160,17 +159,24 @@ export async function topRuns(days = 7, limit = 10): Promise<RunCost[]> {
 
 // Collector health: when it last RAN (heartbeat written at the start of every run), not
 // when it last recorded something: quiet hours record nothing and are fine. Falls back to
-// the newest scan for a collector older than the heartbeat.
-export async function lastCollectorRun(): Promise<Date | null> {
-  const { rows } = await db().query<{ at: Date | null }>(
-    `SELECT coalesce(
-       (SELECT last_beat_at FROM heartbeats WHERE source = 'ops-cost-collector'),
-       (SELECT max(scanned_at) FROM cost_scans)) AS at`,
+// the newest scan for a collector older than the heartbeat. The collector runs every
+// minute, so five quiet minutes means it isn't running. Judged by the database clock.
+export type CollectorHealth = { at: Date | null; stale: boolean };
+
+export async function collectorHealth(): Promise<CollectorHealth> {
+  const { rows } = await db().query<CollectorHealth>(
+    `WITH h AS (
+       SELECT coalesce(
+         (SELECT last_beat_at FROM heartbeats WHERE source = 'ops-cost-collector'),
+         (SELECT max(scanned_at) FROM cost_scans)) AS at)
+     SELECT at, (at IS NULL OR now() - at > interval '5 minutes') AS stale FROM h`,
   );
-  return rows[0]?.at ?? null;
+  return rows[0] ?? { at: null, stale: true };
 }
 
 export function executionUrl(workflowId: string, executionId: string): string | null {
   const base = process.env.N8N_PUBLIC_URL?.replace(/\/+$/, '');
-  return base ? `${base}/workflow/${encodeURIComponent(workflowId)}/executions/${encodeURIComponent(executionId)}` : null;
+  return base
+    ? `${base}/workflow/${encodeURIComponent(workflowId)}/executions/${encodeURIComponent(executionId)}`
+    : null;
 }

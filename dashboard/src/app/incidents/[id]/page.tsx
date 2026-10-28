@@ -13,7 +13,9 @@ function StatusButton({ id, to, label, primary }: { id: number; to: Status; labe
     <form action={changeStatus}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={to} />
-      <button type="submit" className={primary ? 'btn primary' : 'btn'}>{label}</button>
+      <button type="submit" className={primary ? 'btn primary' : 'btn'}>
+        {label}
+      </button>
     </form>
   );
 }
@@ -29,7 +31,9 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
 
   return (
     <main>
-      <Link href="/" className="back">← All incidents</Link>
+      <Link href="/" className="back">
+        ← All incidents
+      </Link>
 
       <div className="head">
         <div>
@@ -55,16 +59,40 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
       </div>
 
       <section className="stats">
-        <div className="stat"><div className="k">Occurrences</div><div className="v">{incident.occurrences}</div></div>
-        <div className="stat"><div className="k">First seen</div><div className="v small" title={exact(incident.first_seen_at)}>{ago(incident.first_seen_at)}</div></div>
-        <div className="stat"><div className="k">Last seen</div><div className="v small" title={exact(incident.last_seen_at)}>{ago(incident.last_seen_at)}</div></div>
-        <div className="stat"><div className="k">Last alert</div><div className="v small" title={exact(incident.last_alerted_at)}>{ago(incident.last_alerted_at)}</div></div>
+        <div className="stat">
+          <div className="k">Occurrences</div>
+          <div className="v">{incident.occurrences}</div>
+        </div>
+        <div className="stat">
+          <div className="k">First seen</div>
+          <div className="v small" title={exact(incident.first_seen_at)}>
+            {ago(incident.first_seen_at)}
+          </div>
+        </div>
+        <div className="stat">
+          <div className="k">Last seen</div>
+          <div className="v small" title={exact(incident.last_seen_at)}>
+            {ago(incident.last_seen_at)}
+          </div>
+        </div>
+        <div className="stat">
+          <div className="k">Last alert</div>
+          <div className="v small" title={exact(incident.last_alerted_at)}>
+            {ago(incident.last_alerted_at)}
+          </div>
+        </div>
       </section>
 
       <h3>Normalized message</h3>
       <div className="message">{incident.error_message}</div>
 
-      <h3>Recent events <span className="node">({events.length}{events.length === 50 ? '+' : ''})</span></h3>
+      <h3>
+        Recent events{' '}
+        <span className="node">
+          ({events.length}
+          {events.length === 50 ? '+' : ''})
+        </span>
+      </h3>
       <div className="card">
         {events.length === 0 ? (
           <div className="empty">No events recorded.</div>
@@ -83,14 +111,22 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
               {events.map((e) => (
                 <tr key={e.id}>
                   <td className="id">
-                    {e.execution_url
-                      ? <a href={e.execution_url} target="_blank" rel="noreferrer">{e.execution_id} ↗</a>
-                      : e.execution_id}
+                    {e.execution_url ? (
+                      <a href={e.execution_url} target="_blank" rel="noreferrer">
+                        {e.execution_id} ↗
+                      </a>
+                    ) : (
+                      e.execution_id
+                    )}
                   </td>
-                  <td className="when" title={exact(e.occurred_at)}>{ago(e.occurred_at)}</td>
+                  <td className="when" title={exact(e.occurred_at)}>
+                    {ago(e.occurred_at)}
+                  </td>
                   <td className="hide-sm node">{e.execution_mode ?? '—'}</td>
                   <td>
-                    <div className="msg" title={e.error_message}>{e.error_message}</div>
+                    <div className="msg" title={e.error_message}>
+                      {e.error_message}
+                    </div>
                     {e.error_raw && (
                       <details>
                         <summary>raw error</summary>
@@ -98,7 +134,9 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
                       </details>
                     )}
                   </td>
-                  <td><RetryCell event={e} incidentId={id} /></td>
+                  <td>
+                    <RetryCell event={e} incidentId={id} />
+                  </td>
                 </tr>
               ))}
             </tbody>

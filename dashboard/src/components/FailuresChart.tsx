@@ -18,7 +18,10 @@ export default function FailuresChart({ days }: { days: DayFailures[] }) {
       {present.length > 0 && (
         <ul className="legend">
           {present.map((c) => (
-            <li key={c}><span className={`swatch f-${c}`} />{c}</li>
+            <li key={c}>
+              <span className={`swatch f-${c}`} />
+              {c}
+            </li>
           ))}
         </ul>
       )}
@@ -34,32 +37,63 @@ export default function FailuresChart({ days }: { days: DayFailures[] }) {
               </div>
               <div className="tip" role="tooltip">
                 <strong>{label(d.day)}</strong>
-                {d.total === 0 ? <span>no failures</span> : CLASS_ORDER.filter((c) => d.by_class[c]).map((c) => (
-                  <span className="row" key={c}><b><span className={`swatch f-${c}`} />{c}</b>{d.by_class[c]}</span>
-                ))}
-                {d.total > 0 && <span className="row"><b>total</b>{d.total}</span>}
+                {d.total === 0 ? (
+                  <span>no failures</span>
+                ) : (
+                  CLASS_ORDER.filter((c) => d.by_class[c]).map((c) => (
+                    <span className="row" key={c}>
+                      <b>
+                        <span className={`swatch f-${c}`} />
+                        {c}
+                      </b>
+                      {d.by_class[c]}
+                    </span>
+                  ))
+                )}
+                {d.total > 0 && (
+                  <span className="row">
+                    <b>total</b>
+                    {d.total}
+                  </span>
+                )}
               </div>
-              <div className="bar-x" aria-hidden="true">{(days.length - 1 - i) % every === 0 ? label(d.day) : ''}</div>
+              <div className="bar-x" aria-hidden="true">
+                {(days.length - 1 - i) % every === 0 ? label(d.day) : ''}
+              </div>
             </div>
           ))}
         </div>
       </div>
       <details className="chart-table">
         <summary>Show as table</summary>
-        <div className="table-wrap"><table className="table">
-          <thead>
-            <tr><th>Day (UTC)</th>{CLASS_ORDER.map((c) => <th key={c} className="num">{c}</th>)}<th className="num">Total</th></tr>
-          </thead>
-          <tbody>
-            {[...days].reverse().map((d) => (
-              <tr key={d.day}>
-                <td>{d.day}</td>
-                {CLASS_ORDER.map((c) => <td key={c} className="num">{d.by_class[c] || ''}</td>)}
-                <td className="num">{d.total}</td>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Day (UTC)</th>
+                {CLASS_ORDER.map((c) => (
+                  <th key={c} className="num">
+                    {c}
+                  </th>
+                ))}
+                <th className="num">Total</th>
               </tr>
-            ))}
-          </tbody>
-        </table></div>
+            </thead>
+            <tbody>
+              {[...days].reverse().map((d) => (
+                <tr key={d.day}>
+                  <td>{d.day}</td>
+                  {CLASS_ORDER.map((c) => (
+                    <td key={c} className="num">
+                      {d.by_class[c] || ''}
+                    </td>
+                  ))}
+                  <td className="num">{d.total}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </details>
     </figure>
   );

@@ -20,18 +20,30 @@ export default async function SystemStrip() {
       {s.watchdog === null ? (
         <span className="strip-item muted">Watchdog not configured</span>
       ) : !s.watchdog.reachable ? (
-        <span className="strip-item st-down" title={s.watchdog.reason}>▲ Watchdog unreachable</span>
+        <span className="strip-item st-down" title={s.watchdog.reason}>
+          ▲ Watchdog unreachable
+        </span>
       ) : (
         <>
           <span className="strip-label">Watchdog</span>
           {s.watchdog.checks.map((c) => {
             const when = c.last_ping_at ?? c.since;
-            const title = [c.label, c.state, c.detail, when ? `${c.last_ping_at ? 'last signal' : 'since'} ${exact(when)}` : '']
-              .filter(Boolean).join(' · ');
+            const title = [
+              c.label,
+              c.state,
+              c.detail,
+              when ? `${c.last_ping_at ? 'last signal' : 'since'} ${exact(when)}` : '',
+            ]
+              .filter(Boolean)
+              .join(' · ');
             return (
               <span key={c.name} className={`strip-item st-${c.state}`} title={title}>
                 {MARK[c.state]} {SHORT[c.name] ?? c.label}
-                {c.state === 'down' ? <b> down</b> : c.last_ping_at ? <span className="muted"> {ago(c.last_ping_at)}</span> : null}
+                {c.state === 'down' ? (
+                  <b> down</b>
+                ) : c.last_ping_at ? (
+                  <span className="muted"> {ago(c.last_ping_at)}</span>
+                ) : null}
               </span>
             );
           })}

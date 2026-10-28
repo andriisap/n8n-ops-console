@@ -11,7 +11,9 @@ export default function Loading() {
         ))}
       </div>
       <div className="card">
-        {[90, 70, 80, 60, 75].map((w, i) => <div className="skel skel-line" key={i} style={{ width: `${w}%` }} />)}
+        {[90, 70, 80, 60, 75].map((w, i) => (
+          <div className="skel skel-line" key={i} style={{ width: `${w}%` }} />
+        ))}
       </div>
     </main>
   );
