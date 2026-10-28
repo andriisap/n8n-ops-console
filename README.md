@@ -2,7 +2,7 @@
 
 Reliability layer for self-hosted n8n: one error workflow for every workflow, incidents grouped by fingerprint, retries with backoff, LLM cost per run, and a Next.js dashboard on top.
 
-Status: stages 0–6 of 8 done (up to an external watchdog for n8n itself); next is stage 7. Tested on n8n 2.42.5.
+Status: stages 0–7 of 8 done (up to recovery metrics and a polished dashboard); next is stage 8, packaging. Tested on n8n 2.42.5.
 
 ## How a failure flows
 
@@ -36,6 +36,8 @@ dashboard (Next.js, ops.<host>)
   → reads incidents, events and retry state as a read-mostly role
   → Resolve / Ignore / Reopen, Replay (queues a job, holds no n8n key), refreshes every 10 s
   → /costs: spend today / 7 / 30 days, per day, per workflow, per model with its price source, top runs
+  → /metrics: time to recover (automatic retries) and to resolve (status log), failures per day by class, failing nodes
+  → filters in the URL, empty / loading / error states, light and dark theme
 ```
 
 ## Dashboard
@@ -70,6 +72,8 @@ python3 infra/tests/test_llm_usage.py                   # pricing by date and ti
 node workflows/ops/src/cost-collector.test.js           # listing pages → finished ids
 python3 infra/tests/test_cost_collector.py              # scan window, oldest-first batches of 25, no re-downloads
 python3 infra/tests/test_budget.py                      # one 💸 alert a day, retried until delivered
+python3 infra/tests/test_metrics_db.py                  # status log: every change, who made it, backfill; recovery views
+(cd dashboard && npm test)                              # /metrics queries against Postgres: counts, times, filters, empty data
 (cd watchdog && npm test)                               # watchdog: silence and probe thresholds, alert once per change
 node workflows/ops/src/budget-alert.test.js             # alert text: amounts, top workflows, unpriced warning
 ```
