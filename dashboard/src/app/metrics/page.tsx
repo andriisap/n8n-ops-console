@@ -49,6 +49,7 @@ export default async function MetricsPage({ searchParams }: {
           <div className="v">{count(s.failures)}</div>
           <div className="stat-sub">
             {s.failures_before === 0 && s.failures === 0 ? 'none in the period before either'
+              : s.failures_before === 0 ? `nothing in the ${f.days} days before`
               : delta === 0 ? `same as the ${f.days} days before`
               : <span className={delta > 0 ? 'trend-up' : 'trend-down'}>{delta > 0 ? '▲' : '▼'} {Math.abs(delta)} vs the {f.days} days before</span>}
           </div>
