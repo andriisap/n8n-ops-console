@@ -11,7 +11,7 @@
   --open-bg: #fdecea;
   --resolved: #1f7a45;
   --resolved-bg: #e6f4ec;
-  --ignored: #6b7280;
+  --ignored: #5b6270;
   --ignored-bg: #eef0f3;
 
   --c-rate_limit: #9a5b00;
@@ -33,8 +33,10 @@
   color-scheme: light;
 }
 
+/* Dark theme: follows the system unless the viewer picked one (cookie `theme`, set by
+   ThemeSwitch, rendered as <html data-theme>). Same values in both blocks. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #0f1115;
     --surface: #171a20;
     --surface-2: #1e222a;
@@ -63,6 +65,36 @@
     --f-unknown: #6b717c;
     color-scheme: dark;
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0f1115;
+  --surface: #171a20;
+  --surface-2: #1e222a;
+  --border: #2a2f38;
+  --text: #e7e9ee;
+  --muted: #9099a8;
+  --accent: #7d9bff;
+
+  --open: #ff7b72;
+  --open-bg: #3a1d1d;
+  --resolved: #56d38a;
+  --resolved-bg: #16301f;
+  --ignored: #9aa1ad;
+  --ignored-bg: #23272e;
+
+  --c-rate_limit: #f0b44c;
+  --c-transient: #6fa8ff;
+  --c-auth: #f17ab8;
+  --c-validation: #b394f5;
+  --c-unknown: #9099a8;
+
+  --f-transient: #3987e5;
+  --f-rate_limit: #c98500;
+  --f-auth: #d55181;
+  --f-validation: #9085e9;
+  --f-unknown: #6b717c;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -304,3 +336,19 @@ details pre {
 .table-wrap .table.fit { min-width: 0; }
 .show-sm { display: none; }
 @media (max-width: 720px) { .show-sm { display: block; margin-top: 4px; } }
+.top-right { display: flex; align-items: center; gap: 12px; }
+.theme-switch {
+  font: inherit; font-size: 12px; color: var(--muted); background: transparent; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px;
+}
+.theme-switch:hover { color: var(--text); background: var(--surface-2); }
+
+/* Loading skeleton */
+.skel { background: var(--surface-2); border-radius: 6px; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+.skel-line { height: 12px; margin: 14px; }
+.state { padding: 40px 16px; text-align: center; color: var(--muted); }
+.state h2 { color: var(--text); font-size: 16px; margin: 0 0 6px; }
+.state p { margin: 0 0 14px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

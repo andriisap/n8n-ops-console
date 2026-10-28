@@ -24,8 +24,13 @@ Plan: [decision 037](decisions.md). Each step is one pull request.
 
 - [ ] Merge PR #17 → new image tag in the Hostinger YAML → Deploy
 - [ ] /metrics shows the live numbers; the two automatic recoveries of chaos-recover give the median recover time (~108 s, as in step 1)
-## 5. Empty and error states, loading skeletons
-## 6. Dark theme switch, contrast check
+## 5–6. States and theme (PR #18)
+
+- [x] One empty state per page instead of a row of empty cards: /metrics ("look at 30 days", "clear filters"), /costs, incidents (says which filter is empty)
+- [x] Loading skeleton while a page's queries run; error page for any page (database down) with the error id to find in `docker logs`; not-found with links to the three sections
+- [x] Theme switch in the header: system → light → dark. Kept in a cookie and rendered by the server, so no flash on load; checked: a dark system with "light" chosen stays light
+- [x] Text contrast checked for every text colour on every surface in both themes (WCAG 4.5:1): only `ignored` in light was short (4.2), darkened
+- [ ] Merge PR #18 → new image tag → Deploy
 ## 7. Deploy
 ## 8. Live check against psql
 ## 9. Docs
