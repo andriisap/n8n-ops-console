@@ -47,7 +47,7 @@ export default async function CostsPage() {
         <Stat k="Last 30 days" t={s.last30} />
         <div className="stat">
           <div className="k">Average run, 7 days</div>
-          <div className="v">{usd(perRun)}</div>
+          <div className="v">{perRun === null ? '—' : usd(perRun)}</div>
           <div className="stat-sub">
             {count(s.last7.tokens_in)} in · {count(s.last7.tokens_out)} out tokens
             {s.last7.estimated > 0 && <span className="warn"> · {s.last7.estimated} estimated</span>}
@@ -55,6 +55,12 @@ export default async function CostsPage() {
         </div>
       </div>
 
+      {s.last30.calls === 0 ? (
+        <div className="card state">
+          <h2>No LLM calls in the last 30 days</h2>
+          <p>Runs of any workflow with a model node show up here within a minute, priced per call.</p>
+        </div>
+      ) : (<>
       <section className="section">
         <h3>Spend per day, last 14 days</h3>
         <div className="card pad">
@@ -187,6 +193,7 @@ export default async function CostsPage() {
           )}
         </div>
       </section>
+      </>)}
     </main>
   );
 }
