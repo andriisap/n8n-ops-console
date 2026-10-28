@@ -19,5 +19,10 @@ export default function AutoRefresh({ seconds }: { seconds: number }) {
     };
   }, [router, seconds]);
 
-  return <span className="live">live · refreshes every {seconds}s</span>;
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-muted">
+      <span className="size-[7px] rounded-full bg-resolved shadow-[0_0_0_3px_var(--resolved-bg)]" aria-hidden />
+      live · refreshes every {seconds}s
+    </span>
+  );
 }

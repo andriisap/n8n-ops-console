@@ -139,7 +139,8 @@ Eight stages, each with a checklist of what was done and checked on the live ser
 
 | Part | Choice |
 | --- | --- |
-| App | Next.js 16 App Router, server components query Postgres, one server action writes |
+| App | Next.js 16 App Router, server components query Postgres, server actions write |
+| UI | Tailwind CSS v4 with the design tokens in `@theme`, shadcn-style components (Radix Select, cva variants), lucide icons; charts are server-rendered HTML, no chart library |
 | Database access | `ops_dashboard` role: SELECT everywhere, UPDATE on `incidents.status` and `resolved_at` only |
 | Delivery | GitHub Actions → GHCR image tagged `sha-<commit>` → pulled by the server |
 | Access | Traefik basic auth, HTTPS from Let's Encrypt, no published port |

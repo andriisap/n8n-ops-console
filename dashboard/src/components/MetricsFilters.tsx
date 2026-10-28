@@ -1,7 +1,10 @@
 'use client';
 
+import { Check, Square } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { LinkTab, LinkTabs } from '@/components/ui/link-tabs';
+import { ALL, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { filterQuery, PERIODS, type MetricsFilter, type WorkflowOption } from '@/lib/metrics';
 
 // Period, workflow and test-workflow switch. All of it lives in the URL, so any view can
@@ -17,41 +20,41 @@ export default function MetricsFilters({
 }) {
   const router = useRouter();
   const shown = workflows.filter((w) => !f.hideTest || !w.test || w.workflow_id === f.workflow);
+  const Box = f.hideTest ? Square : Check;
 
   return (
-    <div className="filters">
-      <nav className="tabs" aria-label="Period">
+    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <LinkTabs label="Period">
         {PERIODS.map((d) => (
-          <Link
-            key={d}
-            className="tab"
-            href={base + filterQuery(f, { days: d })}
-            aria-current={f.days === d ? 'page' : undefined}
-          >
+          <LinkTab key={d} href={base + filterQuery(f, { days: d })} active={f.days === d}>
             {d} days
-          </Link>
+          </LinkTab>
         ))}
-      </nav>
-      <select
-        className="select"
-        aria-label="Workflow"
-        value={f.workflow ?? ''}
-        onChange={(e) => router.push(base + filterQuery(f, { workflow: e.target.value || null }))}
+      </LinkTabs>
+      <Select
+        value={f.workflow ?? ALL}
+        onValueChange={(v) => router.push(base + filterQuery(f, { workflow: v === ALL ? null : v }))}
       >
-        <option value="">All workflows</option>
-        {shown.map((w) => (
-          <option key={w.workflow_id} value={w.workflow_id}>
-            {w.workflow_name}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger aria-label="Workflow" className="w-44">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>All workflows</SelectItem>
+          {shown.map((w) => (
+            <SelectItem key={w.workflow_id} value={w.workflow_id}>
+              {w.workflow_name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <Link
-        className="toggle"
+        className="inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-fg hover:no-underline"
         href={base + filterQuery(f, { hideTest: !f.hideTest })}
         role="switch"
         aria-checked={!f.hideTest}
       >
-        <span aria-hidden="true">{f.hideTest ? '☐' : '☑'}</span> Include test workflows (chaos-*)
+        <Box className="size-3.5 rounded-sm border border-current" aria-hidden />
+        Include test workflows (chaos-*)
       </Link>
     </div>
   );

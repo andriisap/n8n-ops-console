@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { ClassLabel, StatusBadge } from '@/components/Badges';
-import { ago, exact } from '@/lib/format';
 import IncidentFilters from '@/components/IncidentFilters';
+import { Card, EmptyState } from '@/components/ui/card';
+import { LinkTab, LinkTabs } from '@/components/ui/link-tabs';
+import { Table, TableCell, TableHead, TableRow } from '@/components/ui/table';
+import { ago, exact } from '@/lib/format';
 import {
   countByStatus,
   incidentQuery,
@@ -18,6 +21,8 @@ export const dynamic = 'force-dynamic';
 
 type Filter = Status | 'all';
 
+const LIMIT = 200;
+
 export default async function IncidentsPage({ searchParams }: { searchParams: Promise<IncidentSearch> }) {
   const f = parseIncidentFilter(await searchParams);
   const filter: Filter = f.status;
@@ -28,34 +33,27 @@ export default async function IncidentsPage({ searchParams }: { searchParams: Pr
     ...STATUSES.map((s) => ({ key: s, label: s[0].toUpperCase() + s.slice(1), n: counts[s] })),
     { key: 'all', label: 'All', n: total },
   ];
+  const cleared = '/' + incidentQuery(f, { workflow: null, errorClass: null, days: null, q: null });
 
   return (
     <main>
-      <nav className="tabs" aria-label="Filter by status">
+      <LinkTabs label="Filter by status" className="mb-4">
         {tabs.map((t) => (
-          <Link
-            key={t.key}
-            href={'/' + incidentQuery(f, { status: t.key })}
-            className="tab"
-            aria-current={filter === t.key ? 'page' : undefined}
-          >
+          <LinkTab key={t.key} href={'/' + incidentQuery(f, { status: t.key })} active={filter === t.key} count={t.n}>
             {t.label}
-            <span className="n">{t.n}</span>
-          </Link>
+          </LinkTab>
         ))}
-      </nav>
+      </LinkTabs>
 
       <IncidentFilters key={incidentQuery(f)} f={f} workflows={workflows} />
 
-      <div className="card">
+      <Card>
         {incidents.length === 0 ? (
-          <div className="empty">
+          <EmptyState>
             {isFiltered(f) ? (
               <>
                 No {filter === 'all' ? '' : `${filter} `}incidents match these filters.{' '}
-                <Link href={'/' + incidentQuery(f, { workflow: null, errorClass: null, days: null, q: null })}>
-                  Clear filters
-                </Link>
+                <Link href={cleared}>Clear filters</Link>
               </>
             ) : filter === 'open' ? (
               'No open incidents. Everything is running.'
@@ -64,64 +62,69 @@ export default async function IncidentsPage({ searchParams }: { searchParams: Pr
             ) : (
               `No ${filter} incidents.`
             )}
-          </div>
+          </EmptyState>
         ) : (
-          <div className="table-wrap">
-            <table className="table fit">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Workflow · node</th>
-                  <th className="hide-sm">Class</th>
-                  <th className="num hide-sm">Count</th>
-                  <th className="hide-sm">Last seen</th>
-                  <th className="hide-sm">First seen</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {incidents.map((i) => (
-                  <tr key={i.id}>
-                    <td className="id">
-                      <Link href={`/incidents/${i.id}`}>{i.id}</Link>
-                    </td>
-                    <td>
-                      <Link href={`/incidents/${i.id}`} className="wf">
-                        {i.workflow_name}
-                      </Link>
-                      {i.node_name && <span className="node"> → {i.node_name}</span>}
-                      <div className="msg" title={i.error_message}>
-                        {i.error_message}
-                      </div>
-                      <div className="show-sm small muted">
-                        <ClassLabel value={i.error_class} /> · {i.occurrences}× · {ago(i.last_seen_at)}
-                      </div>
-                    </td>
-                    <td className="hide-sm">
-                      <ClassLabel value={i.error_class} />
-                    </td>
-                    <td className="num hide-sm">{i.occurrences}</td>
-                    <td className="when hide-sm" title={exact(i.last_seen_at)}>
-                      {ago(i.last_seen_at)}
-                    </td>
-                    <td className="when hide-sm" title={exact(i.first_seen_at)}>
-                      {ago(i.first_seen_at)}
-                    </td>
-                    <td>
-                      <StatusBadge status={i.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table fit>
+            <thead>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>Workflow · node</TableHead>
+                <TableHead className="max-md:hidden">Class</TableHead>
+                <TableHead numeric className="max-md:hidden">
+                  Count
+                </TableHead>
+                <TableHead className="max-md:hidden">Last seen</TableHead>
+                <TableHead className="max-md:hidden">First seen</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </thead>
+            <tbody>
+              {incidents.map((i) => (
+                <TableRow key={i.id} data-testid="incident-row">
+                  <TableCell className="font-mono whitespace-nowrap text-muted">
+                    <Link href={`/incidents/${i.id}`}>{i.id}</Link>
+                  </TableCell>
+                  <TableCell>
+                    <Link href={`/incidents/${i.id}`} className="font-semibold">
+                      {i.workflow_name}
+                    </Link>
+                    {i.node_name && <span className="text-muted"> → {i.node_name}</span>}
+                    <div
+                      className="mt-0.5 max-w-[220px] truncate font-mono text-xs text-muted md:max-w-[520px]"
+                      title={i.error_message}
+                    >
+                      {i.error_message}
+                    </div>
+                    <div className="mt-1 text-xs text-muted md:hidden">
+                      <ClassLabel value={i.error_class} /> · {i.occurrences}× · {ago(i.last_seen_at)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-md:hidden">
+                    <ClassLabel value={i.error_class} />
+                  </TableCell>
+                  <TableCell numeric className="max-md:hidden">
+                    {i.occurrences}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted max-md:hidden" title={exact(i.last_seen_at)}>
+                    {ago(i.last_seen_at)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted max-md:hidden" title={exact(i.first_seen_at)}>
+                    {ago(i.first_seen_at)}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={i.status} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </tbody>
+          </Table>
         )}
-        {incidents.length === 200 && (
-          <div className="note" style={{ padding: '8px 14px' }}>
-            Showing the 200 most recent. Narrow the filters to see older ones.
-          </div>
+        {incidents.length === LIMIT && (
+          <p className="px-3.5 py-2 text-xs text-muted">
+            Showing the {LIMIT} most recent. Narrow the filters to see older ones.
+          </p>
         )}
-      </div>
+      </Card>
     </main>
   );
 }
