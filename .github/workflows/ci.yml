@@ -2,6 +2,8 @@ name: ci
 
 # Every pull request and every push to main: the code is linted, type-checked and tested
 # against a real Postgres 17 with all migrations applied, the same way the tests run locally.
+# Runners are pinned (ubuntu-24.04): `ubuntu-latest` moved to a release Playwright's
+# --with-deps couldn't install browser libraries on, and CI should change only on purpose.
 
 on:
   pull_request:
@@ -26,7 +28,7 @@ env:
 jobs:
   dashboard:
     name: dashboard (lint, types, tests, build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17-alpine
@@ -41,8 +43,8 @@ jobs:
       run:
         working-directory: dashboard
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -59,7 +61,7 @@ jobs:
 
   e2e:
     name: dashboard end-to-end (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17-alpine
@@ -74,8 +76,8 @@ jobs:
       run:
         working-directory: dashboard
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -87,7 +89,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build
       - run: npm run e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: playwright-report
@@ -98,7 +100,7 @@ jobs:
 
   database:
     name: database and workflow code
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17-alpine
@@ -110,11 +112,11 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ops" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Migrations
@@ -129,13 +131,13 @@ jobs:
 
   watchdog:
     name: watchdog
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: watchdog
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
