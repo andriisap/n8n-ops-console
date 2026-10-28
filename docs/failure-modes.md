@@ -25,7 +25,7 @@ What happens when things break, and how each case was verified. "Live" means tes
 | Server says `Retry-After: 120` | Not honoured: the Error Trigger payload carries no response headers | Known limitation (decision 024) |
 | n8n itself is down | The watchdog on Cloudflare: 🚨 "n8n web" after 3 failed probes, 🚨 "n8n schedules" after 15 min without a heartbeat, ✅ for each when back | Live 2026-10-26, see stage 6 runs |
 | n8n up but its schedules stopped | `ops-heartbeat` stops pinging: 🚨 "n8n schedules" after 15 min | Unit: watchdog tests; the same path as the live stop |
-| ops-error-handler itself broken | Its own failures never reach an error workflow; the hourly `chaos-canary` stops pinging, 🚨 "Alert pipeline" after 70 min | Unit: watchdog tests; live run pending |
+| ops-error-handler itself broken | Its own failures never reach an error workflow; the hourly `chaos-canary` stops pinging, 🚨 "Alert pipeline" after 70 min | Live 2026-10-27: 🚨 at exactly 70 min, ✅ a minute after the fix |
 | Same execution read twice by the cost collector | No-op: unique per (execution, node, run) | Unit: `test_llm_usage.py` |
 | Model without a known price | Cost NULL ("no price"), never $0; a price added later applies to past runs; budget alert names the unpriced calls | Unit: `test_llm_usage.py`, `test_budget.py` |
 | Cost collector down | `/costs` turns amber after 5 min (heartbeat); on return it picks up from the newest downloaded execution minus 2 h, oldest first, capped at 1 day back | Unit: `test_cost_collector.py`; live 2026-10-26: 7-minute outage, amber at 6 min, 3 missed runs recorded within a minute of return |
@@ -41,6 +41,8 @@ What happens when things break, and how each case was verified. "Live" means tes
 | `docker stop n8n-bet6-n8n-1` at 21:35:20 UTC | 21:38 🚨 n8n web down (HTTP 404: traefik with no container behind it), the dashboard strip showed ▲ n8n web down. 21:46 🚨 n8n schedules down (last heartbeat ~21:31 + 15 min). Nothing else sent |
 | `docker start` at ~21:48 | 21:49 ✅ n8n web back (down for 11 min, counted from the alert), 21:51 ✅ n8n schedules back with the first `ops-heartbeat`. One message per change, none repeated |
 | `chaos-canary` through MCP | Handler recorded it quietly (incident 77 ignored), pinged `error-handler`; no Telegram. chaos-429 still took the normal path |
+| Canary ping broken on purpose (wrong `watchdog_url`) at 12:14 UTC, 27 Oct | From 13:00 UTC every canary run failed the handler itself (404 at the ping), silently: n8n reports nobody's error-workflow failures. 13:11 UTC 🚨 "Alert pipeline … no signal for over 70 min (last at 12:00 UTC)". Real failures of other workflows kept alerting the whole time |
+| Restored 08:45 UTC, 28 Oct | Canary run → handler 43849 succeeded and pinged; 08:46 ✅ "Alert pipeline is back (down for 19 h 35 min)". The fix came late: the check-in that was to restore it waited for an approval in the chat overnight (decision 036) |
 
 ## Live runs of stage 5 (2026-10-26)
 

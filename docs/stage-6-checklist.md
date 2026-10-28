@@ -27,7 +27,7 @@ One Telegram message when a check goes down, one when it's back. Nothing in betw
 - [x] Secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `PING_KEY` with `npx wrangler secret put …`
 - [x] `npm run deploy` → `https://ops-watchdog.andriisap.workers.dev` (first deploy also registers the account's workers.dev subdomain)
 - [x] `/status` → `n8n-http`, `dashboard-http` up; the two pings `unknown`
-- [ ] After PR #12: `npm run deploy` once more (`workers_dev = true`, `preview_urls = false` now explicit)
+- [x] After PR #12: `npm run deploy` once more (`workers_dev = true`, `preview_urls = false` now explicit)
 
 Read `/status` without the key landing in shell history or a screenshot:
 `read -s KEY` then `curl -s -H "x-ping-key: $KEY" https://ops-watchdog.andriisap.workers.dev/status`
@@ -45,18 +45,20 @@ Read `/status` without the key landing in shell history or a screenshot:
 
 A line under the header on every page: the watchdog's four checks (● up, ▲ down, ○ unknown, with the time of the last signal) and the cost collector's heartbeat. It reads the watchdog with a read-only `STATUS_KEY`: a compromised dashboard can read status but can't send pings.
 
-- [ ] `git pull`; `cd watchdog`; `openssl rand -hex 24` → password manager as "ops-watchdog STATUS_KEY"
-- [ ] `npx wrangler secret put STATUS_KEY` → paste it; `npm run deploy`
-- [ ] GitHub Actions builds the dashboard image → note `sha-…`
-- [ ] Hostinger YAML, service `dashboard`: new `image:` tag; under `environment:` add `WATCHDOG_URL=https://ops-watchdog.andriisap.workers.dev` and `WATCHDOG_STATUS_KEY=<the key>` → Deploy
-- [ ] The strip shows four green checks and "Cost collector … ago"
+- [x] `git pull`; `cd watchdog`; `openssl rand -hex 24` → password manager as "ops-watchdog STATUS_KEY"
+- [x] `npx wrangler secret put STATUS_KEY` → paste it; `npm run deploy`
+- [x] GitHub Actions builds the dashboard image → note `sha-…`
+- [x] Hostinger YAML, service `dashboard`: new `image:` tag; under `environment:` add `WATCHDOG_URL=https://ops-watchdog.andriisap.workers.dev` and `WATCHDOG_STATUS_KEY=<the key>` → Deploy
+- [x] The strip shows four green checks and "Cost collector … ago"
 
 ## 5. Live tests
 
 - [x] Strip live: four green checks, "Cost collector … ago" (PR #13 deployed)
 - [x] `docker stop` n8n: 🚨 n8n web after 3 min, 🚨 n8n schedules after 11 min; `docker start`: ✅ both within 3 min. Details in [failure-modes.md](failure-modes.md#live-runs-of-stage-6-2026-10-26)
 - [x] Message fixed: "no signal for 15 min (limit 15)" read as not over the limit → "no signal for over 15 min (last at HH:MM UTC)" (PR #14, needs `npm run deploy`)
-- [ ] Broken alert pipeline: make the canary's ping fail, expect 🚨 "Alert pipeline" within ~70 min, restore, expect ✅
+- [x] Broken alert pipeline: canary ping pointed at a wrong URL → 🚨 "Alert pipeline" exactly 70 min after the last good ping; restored → ✅ within a minute. Restore came 19 h late (decision 036)
+
+Closed 2026-10-28.
 
 ## Done when
 

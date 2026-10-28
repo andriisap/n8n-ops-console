@@ -2,7 +2,7 @@
 
 Reliability layer for self-hosted n8n: one error workflow for every workflow, incidents grouped by fingerprint, retries with backoff, LLM cost per run, and a Next.js dashboard on top.
 
-Status: stages 0–5 of 8 done (up to LLM cost per run); next is stage 6, an external heartbeat for n8n itself. Tested on n8n 2.42.5.
+Status: stages 0–6 of 8 done (up to an external watchdog for n8n itself); next is stage 7. Tested on n8n 2.42.5.
 
 ## How a failure flows
 
@@ -25,6 +25,12 @@ ops-cost-collector (every minute)
   → every model sub-node run = one LLM call: provider, model, tokens
   → llm_usage_costed prices each call by its day and prompt-length tier
   → over the daily budget? → one 💸 Telegram message a day
+
+ops-watchdog (Cloudflare Worker, outside the server, every minute)
+  → n8n-heartbeat: ops-heartbeat pings every 5 min, silent > 15 min = down
+  → error-handler: chaos-canary fails hourly, the handler pings, silent > 70 min = down
+  → probes /healthz and the dashboard, 3 failures in a row = down
+  → Telegram directly, one 🚨 per outage and one ✅ when back
 
 dashboard (Next.js, ops.<host>)
   → reads incidents, events and retry state as a read-mostly role
