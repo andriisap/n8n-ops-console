@@ -39,6 +39,12 @@ export type ErrorEvent = {
   retry_execution_id: string | null;
   retry_last_error: string | null;
   recovered: boolean;                   // some retry of this execution succeeded
+  // the run that succeeded, and what its LLM calls cost (null: no calls recorded, or not yet)
+  recovered_execution_id: string | null;
+  recovered_kind: 'auto' | 'manual' | null;
+  recovered_calls: number | null;
+  recovered_cost: number | null;
+  recovered_unpriced: number | null;
 };
 
 const INCIDENT_COLUMNS = `
@@ -102,9 +108,21 @@ export async function listEvents(incidentId: number, limit = 50): Promise<ErrorE
             rq.status AS retry_status, rq.kind AS retry_kind, rq.attempt AS retry_attempt,
             rq.max_attempts AS retry_max, rq.next_attempt_at AS retry_next_at,
             rq.retry_execution_id, rq.last_error AS retry_last_error,
-            EXISTS (SELECT 1 FROM retry_queue s
-                     WHERE s.execution_id = e.execution_id AND s.status = 'succeeded') AS recovered
+            ok.kind IS NOT NULL AS recovered,
+            ok.retry_execution_id AS recovered_execution_id, ok.kind AS recovered_kind,
+            cost.calls AS recovered_calls, cost.cost AS recovered_cost, cost.unpriced AS recovered_unpriced
        FROM error_events e
+       LEFT JOIN LATERAL (
+            SELECT s.retry_execution_id, s.kind FROM retry_queue s
+             WHERE s.execution_id = e.execution_id AND s.status = 'succeeded'
+             ORDER BY s.id DESC LIMIT 1) ok ON true
+       LEFT JOIN LATERAL (
+            SELECT count(*)::int AS calls,
+                   CASE WHEN count(u.cost_usd) = 0 THEN NULL ELSE sum(u.cost_usd)::float8 END AS cost,
+                   (count(*) FILTER (WHERE u.cost_usd IS NULL))::int AS unpriced
+              FROM llm_usage_costed u
+             WHERE u.execution_id = ok.retry_execution_id
+            HAVING count(*) > 0) cost ON true
        LEFT JOIN LATERAL (
             SELECT status, kind, attempt, max_attempts, next_attempt_at, retry_execution_id, last_error
               FROM retry_queue r

@@ -1,5 +1,5 @@
 import { replayEvent } from '@/app/actions';
-import { ago, exact } from '@/lib/format';
+import { ago, exact, usd } from '@/lib/format';
 import type { ErrorEvent } from '@/lib/incidents';
 
 function ReplayButton({ event, incidentId }: { event: ErrorEvent; incidentId: number }) {
@@ -22,7 +22,14 @@ export default function RetryCell({ event: e, incidentId }: { event: ErrorEvent;
   if (e.recovered) {
     return (
       <span className="retry ok">
-        ✓ recovered{e.retry_execution_id ? ` (${e.retry_execution_id})` : ''}
+        ✓ {e.recovered_kind === 'manual' ? 'replay succeeded' : 'recovered'}
+        {e.recovered_execution_id ? ` (${e.recovered_execution_id})` : ''}
+        {e.recovered_calls ? (
+          <span className="retry-cost" title="LLM calls of the run that succeeded, priced like /costs">
+            {' '}· {e.recovered_cost === null ? 'no price' : usd(e.recovered_cost)} for {e.recovered_calls} LLM call{e.recovered_calls > 1 ? 's' : ''}
+            {e.recovered_unpriced ? `, ${e.recovered_unpriced} without price` : ''}
+          </span>
+        ) : null}
       </span>
     );
   }
