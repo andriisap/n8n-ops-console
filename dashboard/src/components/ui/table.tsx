@@ -1,10 +1,19 @@
 import { cn } from '@/lib/utils';
 
-// Plain table parts with the console's look. A wide table scrolls inside its card on phones;
-// `fit` tables fold columns instead and never scroll.
-export function Table({ className, fit, ...props }: React.ComponentProps<'table'> & { fit?: boolean }) {
+// Plain table parts with the console's look. A wide table scrolls inside its card on phones,
+// and that scroll area can be reached and scrolled with the keyboard; `fit` tables fold
+// columns instead and never scroll.
+export function Table({
+  className,
+  fit,
+  label,
+  ...props
+}: React.ComponentProps<'table'> & { fit?: boolean; label?: string }) {
   return (
-    <div className="overflow-x-auto">
+    <div
+      className="overflow-x-auto"
+      {...(!fit && { tabIndex: 0, role: 'region', 'aria-label': label ?? 'Table, scrolls sideways' })}
+    >
       <table className={cn('w-full border-collapse', !fit && 'min-w-[560px]', className)} {...props} />
     </div>
   );

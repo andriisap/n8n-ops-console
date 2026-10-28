@@ -1,8 +1,8 @@
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Shown while a page's queries run on navigation. Same shapes as the pages, no numbers.
-export default function Loading() {
+// The loading state of a list page: same shapes as the pages, no numbers.
+export function PageSkeleton() {
   return (
     <main aria-busy="true" aria-label="Loading">
       <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
