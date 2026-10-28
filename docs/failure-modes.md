@@ -32,7 +32,18 @@ What happens when things break, and how each case was verified. "Live" means tes
 | API key lacks a scope the collector needs | Run fails with 403, ops-error-handler alerts | Live 2026-10-26: `workflow:list` missing → incident #69 |
 | LLM request over the provider's limit (Groq free tier: 8,000 tokens/minute) | Classified `validation`, not retried automatically; nothing billed, no cost recorded | Live 2026-10-26: incident #76 |
 | Daily budget exceeded | One 💸 message a day; retried until Telegram confirms | Unit: `test_budget.py`; live 2026-10-26: one message at $0.00113 of $0.0005, none on the next runs |
+| An operator resolves, n8n reopens, and so on | Every change is kept in `incident_status_log` with who made it; each open → resolved cycle is its own time to resolve | Unit: `test_metrics_db.py` |
+| Ignored incident keeps failing (the hourly canary) | Left out of every metric | Unit: `metrics.test.ts`; live 2026-10-28: #122 ignored, its failure left the totals at once |
 | Dashboard can't reach the database | Page stays up and says so; cause in `docker logs`; `/api/ready` returns 503 with the Postgres error code | Local, 2026-10-13: wrong password → "database unreachable" page, log `28P01 password authentication failed` |
+
+## Live runs of stage 7 (2026-10-28)
+
+| Run | What happened |
+| --- | --- |
+| Migration 005 on live data | 10 incidents backfilled: 10 openings, 1 ignored (the canary). No resolutions: every resolved incident had reopened since, and earlier cycles were never stored (decision 037). `auto_recoveries`: 2 rows from stage 4, 108 s on average |
+| chaos-recover started through MCP without `fail_until` | Failed with "needs ?fail_until", classified `unknown`, new incident #122 and one 🔴: a mistake in the test, not in the system. Set to Ignore from the dashboard: failures 12 → 11 and `unknown` gone from /metrics within one refresh |
+| chaos-recover with a 75 s outage, execution 44016 | Failed 09:36:22 UTC, retry 1 failed 09:37:00 (44020), retry 2 succeeded 09:37:30 (44024), ✅ Recovered. `auto_recoveries` 68 s; /metrics "Time to recover 68 s", "1 of 2 retried recovered" |
+| chaos-auth, execution 43988 | `auth`, no retry; failing nodes shows `chaos-auth · Call API with bad key`. psql count of failures in 7 days = the tile (12) |
 
 ## Live runs of stage 6 (2026-10-26)
 
