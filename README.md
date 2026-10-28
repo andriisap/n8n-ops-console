@@ -139,7 +139,8 @@ Eight stages, each with a checklist of what was done and checked on the live ser
 
 | Part | Choice |
 | --- | --- |
-| App | Next.js 16 App Router, server components query Postgres, one server action writes |
+| App | Next.js 16 App Router, server components query Postgres, server actions write |
+| UI | Tailwind CSS v4 with the design tokens in `@theme`, shadcn-style components (Radix Select, cva variants), lucide icons; charts are server-rendered HTML, no chart library |
 | Database access | `ops_dashboard` role: SELECT everywhere, UPDATE on `incidents.status` and `resolved_at` only |
 | Delivery | GitHub Actions → GHCR image tagged `sha-<commit>` → pulled by the server |
 | Access | Traefik basic auth, HTTPS from Let's Encrypt, no published port |
@@ -169,6 +170,7 @@ python3 infra/tests/test_cost_collector.py              # scan window, oldest-fi
 python3 infra/tests/test_budget.py                      # one 💸 alert a day, retried until delivered
 python3 infra/tests/test_metrics_db.py                  # status log: every change, who made it, backfill; recovery views
 (cd dashboard && npm test)                              # /metrics queries against Postgres: counts, times, filters, empty data
+(cd dashboard && npm run build && npm run e2e)          # Playwright: filters, Replay, Resolve, 404s, theme, no sideways scroll, axe a11y
 (cd watchdog && npm test)                               # watchdog: silence and probe thresholds, alert once per change
 node workflows/ops/src/budget-alert.test.js             # alert text: amounts, top workflows, unpriced warning
 ```

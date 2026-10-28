@@ -9,7 +9,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'n8n Ops Console',
-  description: 'Incidents and LLM costs from every n8n workflow.',
+  description: 'Incidents, retries, LLM costs and recovery metrics from every n8n workflow.',
   robots: { index: false, follow: false },
 };
 
@@ -19,15 +19,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" data-theme={theme === 'system' ? undefined : theme}>
       <body>
-        <div className="shell">
-          <header className="topbar">
-            <div className="brand">
-              <h1>
-                <Link href="/">n8n Ops Console</Link>
+        <div className="mx-auto max-w-[1120px] px-4 pt-6 pb-16">
+          <header className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <div className="flex items-baseline gap-2.5">
+              <h1 className="m-0 text-lg font-semibold tracking-tight whitespace-nowrap">
+                <Link href="/" className="text-fg hover:no-underline">
+                  n8n Ops Console
+                </Link>
               </h1>
               <NavLinks />
             </div>
-            <div className="top-right">
+            <div className="flex items-center gap-3">
               <AutoRefresh seconds={10} />
               <ThemeSwitch initial={theme} />
             </div>
