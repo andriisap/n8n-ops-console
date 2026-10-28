@@ -13,8 +13,17 @@ Plan: [decision 037](decisions.md). Each step is one pull request.
 
 - [x] `dashboard/src/lib/metrics.ts`: summary, failing nodes, classes, failures per day, workflow list; 9 tests against a scratch Postgres (`npm test` in `dashboard/`)
 - [x] Chart fills per class validated for both themes (decision 038)
-- [ ] Merge, new image tag in the Hostinger YAML → Deploy (or together with step 4)
-## 4. Filters on incidents and metrics
+
+## 4. Filters (PR #17)
+
+- [x] Incidents: workflow, class, last seen (24 h / 7 / 30 days), text search; status tabs count within the filter; all in the URL
+- [x] Links from /metrics (a class, a failing node) open the incident list with the same filter
+- [x] Phone: incident rows fold class, count and last seen under the name, no sideways scroll
+
+## Deploy 2–4
+
+- [ ] Merge PR #17 → new image tag in the Hostinger YAML → Deploy
+- [ ] /metrics shows the live numbers; the two automatic recoveries of chaos-recover give the median recover time (~108 s, as in step 1)
 ## 5. Empty and error states, loading skeletons
 ## 6. Dark theme switch, contrast check
 ## 7. Deploy

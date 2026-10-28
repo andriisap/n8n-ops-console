@@ -299,3 +299,8 @@ details pre {
   .topbar { flex-wrap: wrap; gap: 8px; }
   .brand h1 { white-space: nowrap; }
 }
+.search { min-width: 220px; flex: 1 1 220px; }
+@media (max-width: 520px) { .filters .select { flex: 1 1 140px; } }
+.table-wrap .table.fit { min-width: 0; }
+.show-sm { display: none; }
+@media (max-width: 720px) { .show-sm { display: block; margin-top: 4px; } }
