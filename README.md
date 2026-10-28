@@ -6,6 +6,8 @@ A reliability layer for self-hosted n8n. Every failed workflow becomes an incide
 
 Built as a portfolio project by a React/Next.js developer moving into AI automation. It runs on a real n8n 2.42.5 instance, and every failure mode in the table below was broken on purpose and watched.
 
+Status: v1.0, all eight stages done in October 2026.
+
 ![Metrics page of the dashboard: failures per day by error class, time to recover, failing nodes](docs/img/metrics-dark.png)
 
 ## Problem
@@ -99,7 +101,7 @@ Each row was tested by breaking it. "Live" means on the real server, with the da
 | The same problem fails 10 times | One incident, `occurrences` = 10, one alert | Live 2026-10-13: 4 workflows × 10 runs → 4 incidents, 4 messages |
 | A transient outage of 75 s | Retry 1 fails, retry 2 succeeds, one ✅ | Live 2026-10-28: recovered in 68 s (execution 44016 → 44024) |
 | An outage that doesn't end | 5 retries, gaps growing, one 💀 after about 8 min, no retry loop | Live 2026-10-14: chaos-timeout, 5 attempts, one job in the queue |
-| Bad API key | `auth`, never retried automatically; Replay from the dashboard after the fix | Live 2026-10-14 (chaos-auth), and the demo video |
+| Bad API key | `auth`, never retried automatically; Replay from the dashboard after the fix | Live 2026-10-14 (chaos-auth) |
 | Ops database down | 3 retries, then a fallback alert that names the cause | Live 2026-10-13: "DB error: getaddrinfo EAI_AGAIN ops-db" in ~10 s |
 | n8n container stopped | 🚨 "n8n web" from the watchdog 3 min later, 🚨 "n8n schedules" after 15 min, ✅ for each when back | Live 2026-10-26: `docker stop` |
 | The error handler itself broken | n8n never reports an error workflow's own failures; the hourly canary goes silent, 🚨 "Alert pipeline" after 70 min | Live 2026-10-27: at exactly 70 min |
@@ -133,7 +135,7 @@ The monitoring itself costs nothing extra: the watchdog uses about 6,000 of the 
 
 ## How it was built
 
-Eight stages, each with a checklist of what was done and checked on the live server: [stage 0](docs/stage-0-checklist.md) (n8n and chaos workflows) → [1](docs/stage-1-checklist.md) (ops database) → [2](docs/stage-2-checklist.md) (error handler) → [3](docs/stage-3-checklist.md) (dashboard) → [4](docs/stage-4-checklist.md) (retries and Replay) → [5](docs/stage-5-checklist.md) (LLM cost) → [6](docs/stage-6-checklist.md) (watchdog) → [7](docs/stage-7-checklist.md) (metrics and UI).
+Eight stages, each with a checklist of what was done and checked on the live server: [stage 0](docs/stage-0-checklist.md) (n8n and chaos workflows) → [1](docs/stage-1-checklist.md) (ops database) → [2](docs/stage-2-checklist.md) (error handler) → [3](docs/stage-3-checklist.md) (dashboard) → [4](docs/stage-4-checklist.md) (retries and Replay) → [5](docs/stage-5-checklist.md) (LLM cost) → [6](docs/stage-6-checklist.md) (watchdog) → [7](docs/stage-7-checklist.md) (metrics and UI) → [8](docs/stage-8-checklist.md) (README, CI, Tailwind, end-to-end tests).
 
 ## Dashboard
 
@@ -219,4 +221,4 @@ Note: n8n only calls an error workflow for production runs. Manual runs from the
 
 ## Tested on
 
-n8n 2.42.5 (self-hosted, Docker), Postgres 17, Next.js 16.3.8, Node 22, Cloudflare Workers with D1, October 2026.
+n8n 2.42.5 (self-hosted, Docker), Postgres 17, Next.js 16.3.8 with Tailwind CSS 4.3, Node 22, Playwright 1.56, Cloudflare Workers with D1, October 2026.
